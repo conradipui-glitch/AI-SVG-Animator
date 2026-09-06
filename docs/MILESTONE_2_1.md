@@ -1,6 +1,6 @@
 # Milestone 2.1 — AI Motion Fix + Auto Variants
 
-Status: **implementation in progress**
+Status: **production candidate — automated backend acceptance passed; manual browser acceptance pending**
 
 ## Goal
 
@@ -35,21 +35,33 @@ The Motion Spec is implementation detail. It lives in a collapsible technical pa
 - [x] Remove conflicting backend Motion Spec instructions.
 - [x] Return safe route diagnostics (`provider`, `model`, `status`, message) without exposing secrets.
 - [x] Keep partial valid Motion Specs instead of rejecting the entire AI response.
-- [x] Accept common harmless schema deviations (`easing`, `fade`, `float`, `sway`, top-level motion values).
+- [x] Accept common harmless schema deviations (`easing`, `fade`, `float`, `sway`, `angle`, top-level motion values).
 - [x] Production deployment stores `BAI_API_KEY` only in Cloudflare Worker Secrets.
-- [x] Add production AI smoke check to deploy workflow.
-- [ ] Confirm live B.AI request succeeds after deployment.
+- [x] Add production AI smoke checks to deploy workflow.
+- [x] Confirm live B.AI request succeeds after deployment.
 - [ ] Confirm at least one Cloudflare fallback route succeeds when B.AI is unavailable.
+
+### Production evidence — 2026-09-06
+
+`https://ai-svg-animator.conradipui.workers.dev`
+
+- `/api/ai/health` → B.AI configured; 48 models discovered; all four intended free candidates visible.
+- `/api/ai/motion` → HTTP 200 from `bai / glm-5.3-flash`, no fallback, valid Motion Spec returned.
+- `/api/ai/variants` → HTTP 200 from `bai / glm-5.3-flash`, no fallback, three populated variants returned: Subtle / Natural / Expressive.
+
+The production smoke also exposed a real model-format deviation (`angle` instead of `rotation`), which is now normalized by the Motion Spec parser.
 
 ## P0 — one-click AI motion UX
 
-- [x] Rename the primary action to **Animate with AI**.
+- [x] Rename the primary action to **Animate with AI** / **Анимировать с AI**.
 - [x] No second action is required after the AI response.
 - [x] Show progress states for preparation, AI request, validation and application.
 - [x] Automatically play a valid Motion Spec.
 - [x] Keep Replay bound to the latest AI Motion Spec.
 - [x] Put raw model output and diagnostics under **Technical details**.
 - [x] Show partial-validation warnings instead of silently dropping tracks.
+- [x] Keep the last actually played AI Motion Spec as the active export state.
+- [x] Export active AI animation as standalone HTML using the browser Web Animations API.
 
 ## P1 — visual + structural understanding
 
@@ -70,7 +82,8 @@ It is intentionally not yet full semantic restructuring. Splitting a solid arm i
 - [x] Display usable variants as cards.
 - [x] Apply the selected card immediately to the live canvas.
 - [x] Preserve technical warnings for each variant.
-- [ ] Verify all three variants on production with simple and multi-object SVG fixtures.
+- [x] Verify the production variants endpoint with multiple allowed targets.
+- [ ] Complete manual browser QA on simple, character-like and multi-object SVG fixtures.
 
 ## Motion Spec safety contract
 
@@ -85,7 +98,7 @@ Allowed effects:
 - `pulse`
 - `draw`
 
-Aliases such as `float`, `sway`, `move`, `fade` and `zoom` may be normalized into the safe effect set.
+Aliases such as `float`, `sway`, `move`, `fade`, `zoom` and model-produced rotation `angle` values may be normalized into the safe contract.
 
 Every target must resolve to an ID already present in the sanitized SVG and marked as an animator target. Unknown target IDs are rejected.
 
@@ -114,12 +127,15 @@ Milestone 2.1 is complete when all of the following are true on the production W
 6. Ask for automatic variants.
 7. Receive at least three usable directions when the model follows the contract.
 8. Apply each variant from its card and see it play immediately.
-9. A malformed AI response does not break the static animator.
-10. Partial valid specs still animate valid tracks.
-11. Provider failures expose useful safe diagnostics in Technical details.
-12. CI build and Worker dry-run pass.
-13. Production deploy succeeds with secrets kept outside the repository.
-14. Production AI smoke test returns HTTP 200 for at least one configured route.
+9. Export the currently active AI animation and replay it from the standalone HTML file.
+10. A malformed AI response does not break the static animator.
+11. Partial valid specs still animate valid tracks.
+12. Provider failures expose useful safe diagnostics in Technical details.
+13. CI build and Worker dry-run pass.
+14. Production deploy succeeds with secrets kept outside the repository.
+15. Production AI smoke tests return HTTP 200 for motion and variants.
+
+Automated criteria 13–15 are passing. Criteria 1–12 require final author/browser acceptance before this milestone is marked **closed**.
 
 ## Next milestone
 
