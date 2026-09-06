@@ -35,7 +35,32 @@ export interface TranslationSchema {
     floatDesc: string;
   };
   controls: { section: string; duration: string; intensity: string; loop: string };
-  status: { cleaning: string; animating: string; ready: string; exported: string; loaded: string };
-  errors: { invalidSvg: string; emptySvg: string; readFile: string };
+  ai: {
+    section: string;
+    model: string;
+    prompt: string;
+    promptPlaceholder: string;
+    autoHint: string;
+    generate: string;
+    generating: string;
+    planTitle: string;
+    noModels: string;
+    fallback: string;
+  };
+  status: {
+    cleaning: string;
+    animating: string;
+    ready: string;
+    exported: string;
+    loaded: string;
+    aiReady: string;
+  };
+  errors: {
+    invalidSvg: string;
+    emptySvg: string;
+    readFile: string;
+    aiUnavailable: string;
+    aiNeedsSvg: string;
+  };
   footer: { note: string };
 }
