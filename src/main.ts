@@ -1,4 +1,5 @@
 import './styles.css';
+import './ux-fixes.css';
 import {
   AiRequestError,
   fetchAiModels,
@@ -135,6 +136,7 @@ function render(): void {
               ? `<div class="svg-frame" id="svgFrame">${state.cleanSvg}</div>`
               : `<div class="empty-state"><div class="orbit-icon"><span></span></div><h2>${tr.workspace.emptyTitle}</h2><p>${tr.workspace.emptyBody}</p></div>`}
           </div>
+          ${canvasResultPanel()}
           <div class="canvas-actions">
             <button class="button primary" id="animateButton" ${state.cleanSvg ? '' : 'disabled'}>${tr.actions.animate}</button>
             <button class="button ghost" id="replayButton" ${state.cleanSvg ? '' : 'disabled'}>${tr.actions.replay}</button>
@@ -176,13 +178,13 @@ function render(): void {
             <p class="microcopy">${tr.ai.autoHint}</p>
             <div class="ai-actions">
               <button class="button ai-button full" id="aiMotionButton" ${state.cleanSvg && !state.aiBusy ? '' : 'disabled'}>
-                ${state.aiBusy && !state.aiVariants.length ? tr.ai.generating : tr.ai.generate}
+                ${state.aiBusy && state.aiStage !== tr.ai.generatingVariants ? tr.ai.generating : tr.ai.generate}
               </button>
               <button class="button ghost full variants-button" id="aiVariantsButton" ${state.cleanSvg && !state.aiBusy ? '' : 'disabled'}>
                 ${state.aiBusy && state.aiStage === tr.ai.generatingVariants ? tr.ai.generatingVariants : tr.ai.suggestVariants}
               </button>
             </div>
-            ${state.aiBusy && state.aiStage ? `<div class="ai-progress"><span></span><strong>${escapeHtml(state.aiStage)}</strong></div>` : ''}
+            ${state.aiBusy && state.aiStage ? `<div class="ai-progress"><span></span><div><strong>${escapeHtml(state.aiStage)}</strong><small>${escapeHtml(tr.ai.waitHint)}</small></div></div>` : ''}
             ${variantGallery()}
             ${technicalDetails()}
           </div>
@@ -193,6 +195,69 @@ function render(): void {
     </main>`;
 
   bindEvents();
+}
+
+function canvasResultPanel(): string {
+  const tr = t(state.locale);
+  if (!state.cleanSvg) return '';
+
+  if (state.aiBusy) {
+    return `<section class="canvas-result canvas-result-busy" aria-live="polite">
+      <div class="canvas-result-copy">
+        <span>${tr.ai.resultTitle}</span>
+        <strong id="canvasAiStage">${escapeHtml(state.aiStage || tr.ai.generating)}</strong>
+        <small>${escapeHtml(tr.ai.waitHint)}</small>
+      </div>
+      <div class="canvas-loader"><i></i><i></i><i></i></div>
+    </section>`;
+  }
+
+  if (state.aiVariants.length) {
+    const active = state.aiVariants.find((variant) => variant.id === state.aiSelectedVariant) ?? state.aiVariants[0];
+    return `<section class="canvas-result canvas-result-success" aria-live="polite">
+      <div class="canvas-result-copy">
+        <span>${tr.ai.resultTitle}</span>
+        <strong>${escapeHtml(tr.ai.variantsPlaying)}${active ? ` · ${escapeHtml(active.title)}` : ''}</strong>
+        <small>${escapeHtml(tr.ai.resultHint)}</small>
+      </div>
+      <div class="canvas-variant-tabs">
+        ${state.aiVariants.map((variant) => `<button class="canvas-variant-tab ${variant.id === state.aiSelectedVariant ? 'active' : ''}" data-variant-id="${escapeHtml(variant.id)}">${escapeHtml(variant.title)}</button>`).join('')}
+      </div>
+    </section>`;
+  }
+
+  if (state.aiSpec) {
+    return `<section class="canvas-result canvas-result-success" aria-live="polite">
+      <div class="canvas-result-copy">
+        <span>${tr.ai.resultTitle}</span>
+        <strong>${escapeHtml(tr.ai.motionPlaying)}</strong>
+        <small>${state.aiSpec.tracks.length} tracks${state.aiPlanMeta ? ` · ${escapeHtml(state.aiPlanMeta)}` : ''}</small>
+      </div>
+      <button class="button ghost canvas-replay-ai" id="canvasReplayAi">${tr.actions.replay}</button>
+    </section>`;
+  }
+
+  if (state.error && (state.aiPlan || state.aiErrorDetail)) {
+    return `<section class="canvas-result canvas-result-error" aria-live="polite">
+      <div class="canvas-result-copy">
+        <span>${tr.ai.resultTitle}</span>
+        <strong>${escapeHtml(state.error)}</strong>
+        <small>${escapeHtml(state.aiWarnings[0] || state.aiErrorDetail || tr.errors.aiInvalidSpec)}</small>
+      </div>
+    </section>`;
+  }
+
+  if (state.semanticPrepared) {
+    return `<section class="canvas-result canvas-result-info" aria-live="polite">
+      <div class="canvas-result-copy">
+        <span>${tr.ai.resultTitle}</span>
+        <strong>${escapeHtml(tr.ai.semanticReady)}</strong>
+        <small>${escapeHtml(tr.ai.semanticReadyHint)}</small>
+      </div>
+    </section>`;
+  }
+
+  return '';
 }
 
 function readinessPanel(): string {
@@ -351,6 +416,10 @@ function bindEvents(): void {
     renderCanvasFresh();
     requestAnimationFrame(playAnimation);
   });
+  document.querySelector<HTMLButtonElement>('#canvasReplayAi')?.addEventListener('click', () => {
+    renderCanvasFresh();
+    requestAnimationFrame(playAnimation);
+  });
 
   document.querySelector<HTMLButtonElement>('#downloadSvgButton')?.addEventListener('click', () => {
     if (state.cleanSvg) downloadText('animated-source.svg', state.cleanSvg, 'image/svg+xml;charset=utf-8');
@@ -506,7 +575,12 @@ async function generateMotionPlan(): Promise<void> {
   try {
     state.aiStage = tr.status.aiRequesting;
     updateStatus();
-    const result = await requestMotionPlan(state.cleanSvg, state.aiPrompt, state.aiModel || undefined);
+    const result = await requestMotionPlan(
+      state.cleanSvg,
+      state.aiPrompt,
+      state.aiModel || undefined,
+      { includeImage: !state.semanticPrepared },
+    );
     state.aiPlan = formatPlanText(result.text);
     state.aiPlanMeta = `${result.provider} · ${result.model} · ${result.latencyMs}ms${result.fallbackUsed ? ` · ${tr.ai.fallback}` : ''}`;
     state.aiStage = tr.status.aiValidating;
@@ -556,7 +630,12 @@ async function generateVariants(): Promise<void> {
   await nextFrame();
 
   try {
-    const result = await requestMotionVariants(state.cleanSvg, state.aiModel || undefined);
+    const result = await requestMotionVariants(
+      state.cleanSvg,
+      state.aiPrompt,
+      state.aiModel || undefined,
+      { includeImage: !state.semanticPrepared },
+    );
     state.aiPlan = formatPlanText(result.text);
     state.aiPlanMeta = `${result.provider} · ${result.model} · ${result.latencyMs}ms${result.fallbackUsed ? ` · ${tr.ai.fallback}` : ''}`;
     const variants = parseMotionVariants(result.text, state.cleanSvg);
@@ -567,13 +646,31 @@ async function generateVariants(): Promise<void> {
 
     state.aiVariants = variants;
     state.aiWarnings = variants.flatMap((variant) => variant.validation.warnings.map((warning) => `${variant.title}: ${warning}`));
-    state.status = tr.status.variantsReady;
+    const preferred = variants.find((variant) => variant.id.toLowerCase() === 'natural')
+      ?? variants.find((variant) => variant.title.toLowerCase() === 'natural')
+      ?? variants[Math.min(1, variants.length - 1)]
+      ?? variants[0];
+    if (preferred) {
+      state.aiSpec = preferred.spec;
+      state.aiSelectedVariant = preferred.id;
+      state.status = `${tr.status.variantsReady} · ${preferred.title}`;
+    } else {
+      state.status = tr.status.variantsReady;
+    }
   } catch (error) {
     setAiError(error, tr.errors.aiUnavailable);
   } finally {
     state.aiBusy = false;
     state.aiStage = '';
     render();
+    if (state.aiSpec && state.aiVariants.length) {
+      requestAnimationFrame(() => {
+        playAnimation();
+        const active = state.aiVariants.find((variant) => variant.id === state.aiSelectedVariant);
+        state.status = active ? `${t(state.locale).status.variantsReady} · ${active.title}` : t(state.locale).status.variantsReady;
+        updateStatus();
+      });
+    }
   }
 }
 
@@ -655,8 +752,11 @@ function playAnimation(): void {
 }
 
 function updateStatus(): void {
+  const value = state.error || state.aiStage || state.status || t(state.locale).status.ready;
   const status = document.querySelector<HTMLElement>('#statusText');
-  if (status) status.textContent = state.error || state.aiStage || state.status || t(state.locale).status.ready;
+  if (status) status.textContent = value;
+  const canvasStage = document.querySelector<HTMLElement>('#canvasAiStage');
+  if (canvasStage && state.aiStage) canvasStage.textContent = state.aiStage;
 }
 
 function escapeHtml(value: string): string {
