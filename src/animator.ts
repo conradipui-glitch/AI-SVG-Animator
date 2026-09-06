@@ -15,6 +15,11 @@ type MotionGlobal = typeof globalThis & {
   __AI_SVG_ACTIVE_MOTION_SPEC__?: MotionSpec | null;
 };
 
+type SmilSvg = SVGSVGElement & {
+  pauseAnimations?: () => void;
+  setCurrentTime?: (seconds: number) => void;
+};
+
 let activeTimeline: gsap.core.Timeline | null = null;
 
 function setActiveMotionSpec(spec: MotionSpec | null): void {
@@ -32,6 +37,7 @@ export function stopAnimation(): void {
 
 export function animateSvg(svg: SVGSVGElement, options: MotionOptions): void {
   stopAnimation();
+  pauseNativeSvgAnimations(svg);
   setActiveMotionSpec(null);
   const elements = getAnimatableElements(svg);
   if (!elements.length) return;
@@ -48,6 +54,7 @@ export function animateSvg(svg: SVGSVGElement, options: MotionOptions): void {
 
 export function animateMotionSpec(svg: SVGSVGElement, spec: MotionSpec): void {
   stopAnimation();
+  pauseNativeSvgAnimations(svg);
   setActiveMotionSpec(spec);
   const allElements = getMotionTargetElements(svg);
   gsap.killTweensOf(allElements);
@@ -63,6 +70,16 @@ export function animateMotionSpec(svg: SVGSVGElement, spec: MotionSpec): void {
   }
 
   activeTimeline = tl;
+}
+
+function pauseNativeSvgAnimations(svg: SVGSVGElement): void {
+  const smil = svg as SmilSvg;
+  try {
+    smil.setCurrentTime?.(0);
+    smil.pauseAnimations?.();
+  } catch {
+    // Some SVG implementations do not expose the SMIL timing API.
+  }
 }
 
 function addMotionTrack(tl: gsap.core.Timeline, element: SVGGraphicsElement, track: MotionTrack): void {
