@@ -1,4 +1,5 @@
-type ProviderName = 'tokenrouter' | 'cloudflare';
+type ProviderName = 'bai' | 'cloudflare';
+type Capability = 'text' | 'vision';
 
 type AiBinding = {
   run(model: string, input: Record<string, unknown>): Promise<unknown>;
@@ -11,10 +12,10 @@ type AssetsBinding = {
 interface Env {
   AI: AiBinding;
   ASSETS: AssetsBinding;
-  TOKENROUTER_API_KEY?: string;
-  TOKENROUTER_BASE_URL?: string;
-  TOKENROUTER_TEXT_MODEL?: string;
-  TOKENROUTER_VISION_MODEL?: string;
+  BAI_API_KEY?: string;
+  BAI_BASE_URL?: string;
+  BAI_REASON_MODEL?: string;
+  BAI_VISION_MODEL?: string;
 }
 
 interface RouteResult {
@@ -23,6 +24,12 @@ interface RouteResult {
   model: string;
   fallbackUsed: boolean;
   latencyMs: number;
+}
+
+interface BaiModelDefinition {
+  id: string;
+  label: string;
+  capabilities: Capability[];
 }
 
 class ProviderError extends Error {
@@ -36,10 +43,33 @@ class ProviderError extends Error {
   }
 }
 
+const BAI_MODELS: BaiModelDefinition[] = [
+  {
+    id: 'glm-5.3-flash',
+    label: 'GLM-5.3-Flash',
+    capabilities: ['text', 'vision'],
+  },
+  {
+    id: 'qwen3.8-flash',
+    label: 'Qwen3.8-Flash',
+    capabilities: ['text', 'vision'],
+  },
+  {
+    id: 'mimo-v2.5',
+    label: 'MiMo-V2.5',
+    capabilities: ['text', 'vision'],
+  },
+  {
+    id: 'hy3',
+    label: 'Hy3',
+    capabilities: ['text'],
+  },
+];
+
 const DEFAULTS = {
-  tokenRouterBaseUrl: 'https://api.tokenrouter.com/v1',
-  tokenRouterTextModel: 'z-ai/glm-5.3-free',
-  tokenRouterVisionModel: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  baiBaseUrl: 'https://api.b.ai/v1',
+  baiReasonModel: 'glm-5.3-flash',
+  baiVisionModel: 'glm-5.3-flash',
   cloudflareTextModel: '@cf/zai-org/glm-4.7-flash',
   cloudflareVisionModel: '@cf/qwen/qwen3.8-27b',
   cloudflareVisionFallback: '@cf/google/gemma-4-26b-a4b-it',
@@ -96,27 +126,54 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
   return value;
 }
 
-async function tokenRouterChat(
+function baiModel(id: string): BaiModelDefinition | undefined {
+  return BAI_MODELS.find((model) => model.id === id);
+}
+
+function eligibleBaiModels(capability: Capability, preferred?: string): BaiModelDefinition[] {
+  const eligible = BAI_MODELS.filter((model) => model.capabilities.includes(capability));
+  if (!preferred) return eligible;
+
+  const selected = baiModel(preferred);
+  if (!selected || !selected.capabilities.includes(capability)) return eligible;
+
+  return [selected, ...eligible.filter((model) => model.id !== preferred)];
+}
+
+function requestedModel(body: Record<string, unknown>, capability: Capability): string | undefined {
+  if (typeof body.model !== 'string' || !body.model.trim()) return undefined;
+  const id = body.model.trim();
+  const model = baiModel(id);
+  if (!model) return undefined;
+  return model.capabilities.includes(capability) ? id : undefined;
+}
+
+async function baiChat(
   env: Env,
   model: string,
   messages: unknown[],
 ): Promise<string> {
-  if (!env.TOKENROUTER_API_KEY) {
-    throw new ProviderError('TokenRouter key is not configured.', 'tokenrouter', model);
+  if (!env.BAI_API_KEY) {
+    throw new ProviderError('B.AI key is not configured.', 'bai', model);
   }
 
-  const baseUrl = (env.TOKENROUTER_BASE_URL ?? DEFAULTS.tokenRouterBaseUrl).replace(/\/$/, '');
+  const baseUrl = (env.BAI_BASE_URL ?? DEFAULTS.baiBaseUrl).replace(/\/$/, '');
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 35_000);
+  const timeout = setTimeout(() => controller.abort(), 40_000);
 
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${env.TOKENROUTER_API_KEY}`,
+        authorization: `Bearer ${env.BAI_API_KEY}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ model, messages, stream: false }),
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        max_tokens: 4096,
+      }),
       signal: controller.signal,
     });
 
@@ -130,23 +187,51 @@ async function tokenRouterChat(
 
     if (!response.ok) {
       throw new ProviderError(
-        `TokenRouter returned HTTP ${response.status}.`,
-        'tokenrouter',
+        `B.AI returned HTTP ${response.status}.`,
+        'bai',
         model,
         response.status,
       );
     }
 
     const text = extractText(payload);
-    if (!text) throw new ProviderError('TokenRouter returned an empty response.', 'tokenrouter', model);
+    if (!text) throw new ProviderError('B.AI returned an empty response.', 'bai', model);
     return text;
   } catch (error) {
     if (error instanceof ProviderError) throw error;
     throw new ProviderError(
-      error instanceof Error ? error.message : 'TokenRouter request failed.',
-      'tokenrouter',
+      error instanceof Error ? error.message : 'B.AI request failed.',
+      'bai',
       model,
     );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function listBaiModels(env: Env): Promise<string[]> {
+  if (!env.BAI_API_KEY) return [];
+
+  const baseUrl = (env.BAI_BASE_URL ?? DEFAULTS.baiBaseUrl).replace(/\/$/, '');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      headers: { authorization: `Bearer ${env.BAI_API_KEY}` },
+      signal: controller.signal,
+    });
+    if (!response.ok) return [];
+
+    const payload: unknown = await response.json();
+    if (!isRecord(payload) || !Array.isArray(payload.data)) return [];
+
+    return payload.data
+      .filter(isRecord)
+      .map((item) => item.id)
+      .filter((id): id is string => typeof id === 'string');
+  } catch {
+    return [];
   } finally {
     clearTimeout(timeout);
   }
@@ -241,18 +326,22 @@ async function handleReason(request: Request, env: Env): Promise<Response> {
     return json({ error: 'prompt is required' }, { status: 400 });
   }
 
-  const tokenModel = env.TOKENROUTER_TEXT_MODEL ?? DEFAULTS.tokenRouterTextModel;
+  const preferred = requestedModel(body, 'text')
+    ?? env.BAI_REASON_MODEL
+    ?? DEFAULTS.baiReasonModel;
   const messages = [
     { role: 'system', content: MOTION_SYSTEM_PROMPT },
     { role: 'user', content: prompt.trim() },
   ];
 
+  const baiAttempts = eligibleBaiModels('text', preferred).map((model) => ({
+    provider: 'bai' as const,
+    model: model.id,
+    run: () => baiChat(env, model.id, messages),
+  }));
+
   const result = await withRoute([
-    {
-      provider: 'tokenrouter',
-      model: tokenModel,
-      run: () => tokenRouterChat(env, tokenModel, messages),
-    },
+    ...baiAttempts,
     {
       provider: 'cloudflare',
       model: DEFAULTS.cloudflareTextModel,
@@ -279,7 +368,9 @@ async function handleVision(request: Request, env: Env): Promise<Response> {
     return json({ error: 'image is required as a public HTTPS URL or base64 data URI' }, { status: 400 });
   }
 
-  const tokenModel = env.TOKENROUTER_VISION_MODEL ?? DEFAULTS.tokenRouterVisionModel;
+  const preferred = requestedModel(body, 'vision')
+    ?? env.BAI_VISION_MODEL
+    ?? DEFAULTS.baiVisionModel;
   const messages = [
     { role: 'system', content: SCENE_SYSTEM_PROMPT },
     {
@@ -291,12 +382,14 @@ async function handleVision(request: Request, env: Env): Promise<Response> {
     },
   ];
 
+  const baiAttempts = eligibleBaiModels('vision', preferred).map((model) => ({
+    provider: 'bai' as const,
+    model: model.id,
+    run: () => baiChat(env, model.id, messages),
+  }));
+
   const result = await withRoute([
-    {
-      provider: 'tokenrouter',
-      model: tokenModel,
-      run: () => tokenRouterChat(env, tokenModel, messages),
-    },
+    ...baiAttempts,
     {
       provider: 'cloudflare',
       model: DEFAULTS.cloudflareVisionModel,
@@ -317,24 +410,33 @@ async function handleVision(request: Request, env: Env): Promise<Response> {
   return json(result);
 }
 
-function handleModels(env: Env): Response {
+async function handleModels(env: Env): Promise<Response> {
+  const discovered = await listBaiModels(env);
+  const discoveredSet = new Set(discovered);
+
   return json({
-    reason: [
-      { provider: 'tokenrouter', model: env.TOKENROUTER_TEXT_MODEL ?? DEFAULTS.tokenRouterTextModel, capability: 'text/reasoning' },
-      { provider: 'cloudflare', model: DEFAULTS.cloudflareTextModel, capability: 'text/reasoning' },
-      { provider: 'cloudflare', model: DEFAULTS.cloudflareVisionFallback, capability: 'text/vision/reasoning' },
-    ],
-    vision: [
-      {
-        provider: 'tokenrouter',
-        model: env.TOKENROUTER_VISION_MODEL ?? DEFAULTS.tokenRouterVisionModel,
-        capability: 'upstream omni; TokenRouter vision transport unverified',
-      },
-      { provider: 'cloudflare', model: DEFAULTS.cloudflareVisionModel, capability: 'vision/reasoning' },
-      { provider: 'cloudflare', model: DEFAULTS.cloudflareVisionFallback, capability: 'vision/reasoning' },
-      { provider: 'cloudflare', model: DEFAULTS.cloudflareDetectorModel, capability: 'vision/detect/point/OCR' },
-    ],
-    tokenRouterConfigured: Boolean(env.TOKENROUTER_API_KEY),
+    provider: {
+      name: 'bai',
+      baseUrl: env.BAI_BASE_URL ?? DEFAULTS.baiBaseUrl,
+      configured: Boolean(env.BAI_API_KEY),
+    },
+    selectable: BAI_MODELS.map((model) => ({
+      ...model,
+      availableForCredential: discovered.length ? discoveredSet.has(model.id) : null,
+    })),
+    discoveredModelIds: discovered,
+    defaults: {
+      reason: env.BAI_REASON_MODEL ?? DEFAULTS.baiReasonModel,
+      vision: env.BAI_VISION_MODEL ?? DEFAULTS.baiVisionModel,
+    },
+    cloudflareFallbacks: {
+      reason: [DEFAULTS.cloudflareTextModel, DEFAULTS.cloudflareVisionFallback],
+      vision: [
+        DEFAULTS.cloudflareVisionModel,
+        DEFAULTS.cloudflareVisionFallback,
+        DEFAULTS.cloudflareDetectorModel,
+      ],
+    },
   });
 }
 
