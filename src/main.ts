@@ -1,8 +1,9 @@
 import './styles.css';
 import { fetchAiModels, requestMotionPlan, type AiModelOption } from './ai';
-import { animateSvg, stopAnimation, type MotionOptions, type Preset } from './animator';
+import { animateMotionSpec, animateSvg, stopAnimation, type MotionOptions, type Preset } from './animator';
 import { buildStandaloneHtml, downloadText } from './export';
 import { resolveLocale, saveLocale, t, type Locale } from './i18n';
+import { parseMotionSpec, type MotionSpec } from './motion-spec';
 import { SAMPLE_SVG } from './sample';
 import { normalizeSvg } from './svg';
 
@@ -22,6 +23,7 @@ interface State {
   aiPlan: string;
   aiPlanMeta: string;
   aiBusy: boolean;
+  aiSpec: MotionSpec | null;
 }
 
 const state: State = {
@@ -40,6 +42,7 @@ const state: State = {
   aiPlan: '',
   aiPlanMeta: '',
   aiBusy: false,
+  aiSpec: null,
 };
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -159,7 +162,7 @@ function aiModelOptions(emptyLabel: string): string {
 }
 
 function presetCard(preset: Preset, title: string, description: string): string {
-  return `<button class="preset-card ${state.preset === preset ? 'active' : ''}" data-preset="${preset}">
+  return `<button class="preset-card ${state.preset === preset && !state.aiSpec ? 'active' : ''}" data-preset="${preset}">
     <span class="preset-glyph ${preset}"><i></i><i></i><i></i></span>
     <span><strong>${title}</strong><small>${description}</small></span>
   </button>`;
@@ -223,6 +226,7 @@ function bindEvents(): void {
 
   document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((button) => {
     button.addEventListener('click', () => {
+      state.aiSpec = null;
       state.preset = button.dataset.preset as Preset;
       render();
       if (state.cleanSvg) requestAnimationFrame(playAnimation);
@@ -271,6 +275,7 @@ function applySvg(): void {
   state.error = '';
   state.aiPlan = '';
   state.aiPlanMeta = '';
+  state.aiSpec = null;
   try {
     const normalized = normalizeSvg(state.rawSvg);
     state.cleanSvg = normalized.markup;
@@ -297,18 +302,21 @@ async function generateMotionPlan(): Promise<void> {
   state.error = '';
   state.aiPlan = '';
   state.aiPlanMeta = '';
+  state.aiSpec = null;
   render();
 
   try {
     const result = await requestMotionPlan(state.cleanSvg, state.aiPrompt, state.aiModel || undefined);
     state.aiPlan = formatPlanText(result.text);
     state.aiPlanMeta = `${result.model} · ${result.latencyMs}ms${result.fallbackUsed ? ` · ${tr.ai.fallback}` : ''}`;
+    state.aiSpec = parseMotionSpec(result.text, state.cleanSvg);
     state.status = tr.status.aiReady;
   } catch {
     state.error = tr.errors.aiUnavailable;
   } finally {
     state.aiBusy = false;
     render();
+    if (state.aiSpec) requestAnimationFrame(playAnimation);
   }
 }
 
@@ -339,7 +347,11 @@ function playAnimation(): void {
   if (!svg) return;
   state.status = t(state.locale).status.animating;
   updateStatus();
-  animateSvg(svg, motionOptions());
+  if (state.aiSpec) {
+    animateMotionSpec(svg, state.aiSpec);
+  } else {
+    animateSvg(svg, motionOptions());
+  }
 }
 
 function updateStatus(): void {
