@@ -3,6 +3,7 @@ import {
   AiRequestError,
   fetchAiModels,
   requestMotionPlan,
+  requestMotionPreparation,
   requestMotionVariants,
   type AiModelOption,
 } from './ai';
@@ -16,6 +17,12 @@ import {
   type MotionVariant,
 } from './motion-spec';
 import { SAMPLE_SVG } from './sample';
+import {
+  applySemanticPreparation,
+  prepareMotionReadySvg,
+  type MotionSceneMap,
+  type SemanticPreparation,
+} from './scene-map';
 import { normalizeSvg } from './svg';
 
 interface State {
@@ -40,6 +47,10 @@ interface State {
   aiSelectedVariant: string;
   aiWarnings: string[];
   aiErrorDetail: string;
+  sceneMap: MotionSceneMap | null;
+  semanticPrepared: boolean;
+  semanticPrepMeta: string;
+  semanticSeparations: SemanticPreparation['separationSuggestions'];
 }
 
 const state: State = {
@@ -64,6 +75,10 @@ const state: State = {
   aiSelectedVariant: '',
   aiWarnings: [],
   aiErrorDetail: '',
+  sceneMap: null,
+  semanticPrepared: false,
+  semanticPrepMeta: '',
+  semanticSeparations: [],
 };
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -147,6 +162,9 @@ function render(): void {
           </div>
 
           <div class="divider"></div>
+          ${readinessPanel()}
+
+          <div class="divider"></div>
           <div class="motion-block ai-motion-block">
             <div class="panel-kicker">${tr.ai.section}</div>
             <label class="field-label" for="aiModelSelect">${tr.ai.model}</label>
@@ -175,6 +193,61 @@ function render(): void {
     </main>`;
 
   bindEvents();
+}
+
+function readinessPanel(): string {
+  const tr = t(state.locale);
+  const map = state.sceneMap;
+  if (!map) {
+    return `<div class="motion-block readiness-block">
+      <div class="panel-kicker">${tr.readiness.section}</div>
+      <p class="microcopy">${tr.readiness.noSeparation}</p>
+    </div>`;
+  }
+
+  const label = map.readinessLabel === 'high'
+    ? tr.readiness.high
+    : map.readinessLabel === 'medium'
+      ? tr.readiness.medium
+      : tr.readiness.low;
+  const semanticNodes = map.nodes
+    .filter((node) => node.semanticHint !== 'unknown')
+    .sort((a, b) => b.confidence - a.confidence || b.motionPotential - a.motionPotential)
+    .slice(0, 8);
+  const localSeparations = map.separationCandidates.slice(0, 4).map((candidate) => ({
+    target: candidate.target,
+    reason: candidate.note,
+    priority: candidate.priority,
+  }));
+  const separationMap = new Map<string, { target: string; reason: string; priority: string }>();
+  [...state.semanticSeparations, ...localSeparations].forEach((item) => {
+    if (!separationMap.has(item.target)) separationMap.set(item.target, item);
+  });
+  const separations = Array.from(separationMap.values()).slice(0, 6);
+
+  return `<div class="motion-block readiness-block">
+    <div class="panel-kicker">${tr.readiness.section}</div>
+    <section class="readiness-card">
+      <div class="readiness-head">
+        <div><strong>${tr.readiness.score}</strong><span>${state.semanticPrepared ? tr.readiness.enriched : `${map.motionTargetCount} motion targets`}</span></div>
+        <div class="readiness-score ${map.readinessLabel}">${Math.round(map.readinessScore * 100)}% · ${label}</div>
+      </div>
+      <div class="readiness-metrics">
+        <div class="readiness-metric"><span>${tr.readiness.groups}</span><strong>${map.groupCount}</strong></div>
+        <div class="readiness-metric"><span>${tr.readiness.semantic}</span><strong>${map.semanticNodeCount}</strong></div>
+        <div class="readiness-metric"><span>${tr.readiness.splitCandidates}</span><strong>${separations.length}</strong></div>
+      </div>
+      ${semanticNodes.length ? `<div class="semantic-section"><span class="mini-label">${tr.readiness.detected}</span><div class="semantic-list">${semanticNodes.map((node) => `<span class="semantic-chip"><strong>${escapeHtml(node.sourceLabel || node.id)}</strong><small>${escapeHtml(node.semanticHint)} · ${escapeHtml(node.pivot)}</small></span>`).join('')}</div></div>` : ''}
+      <div class="semantic-section separation-section">
+        <span class="mini-label">${tr.readiness.separationTitle}</span>
+        ${separations.length
+          ? `<div class="separation-list">${separations.map((item) => `<div class="separation-item ${escapeHtml(item.priority)}"><strong>${escapeHtml(item.target)}</strong><span>${escapeHtml(item.reason)}</span></div>`).join('')}</div>`
+          : `<p class="microcopy readiness-empty">${tr.readiness.noSeparation}</p>`}
+      </div>
+      <button class="button ghost full prepare-motion-button" id="prepareMotionButton" ${state.cleanSvg && !state.aiBusy ? '' : 'disabled'}>${state.aiBusy && state.aiStage === tr.status.motionPreparing ? tr.readiness.analyzing : tr.readiness.analyze}</button>
+      ${state.semanticPrepMeta ? `<div class="semantic-source">${escapeHtml(state.semanticPrepMeta)}</div>` : ''}
+    </section>
+  </div>`;
 }
 
 function aiModelOptions(emptyLabel: string): string {
@@ -324,6 +397,10 @@ function bindEvents(): void {
     state.aiPrompt = (event.target as HTMLTextAreaElement).value;
   });
 
+  document.querySelector<HTMLButtonElement>('#prepareMotionButton')?.addEventListener('click', () => {
+    void prepareMotionStructure();
+  });
+
   document.querySelector<HTMLButtonElement>('#aiMotionButton')?.addEventListener('click', () => {
     void generateMotionPlan();
   });
@@ -342,6 +419,7 @@ function applySvg(): void {
   if (!state.rawSvg.trim()) {
     state.error = tr.errors.emptySvg;
     state.cleanSvg = '';
+    state.sceneMap = null;
     render();
     return;
   }
@@ -349,9 +427,15 @@ function applySvg(): void {
   state.status = tr.status.cleaning;
   state.error = '';
   resetAiResult();
+  state.sceneMap = null;
+  state.semanticPrepared = false;
+  state.semanticPrepMeta = '';
+  state.semanticSeparations = [];
   try {
     const normalized = normalizeSvg(state.rawSvg);
-    state.cleanSvg = normalized.markup;
+    const prepared = prepareMotionReadySvg(normalized.markup);
+    state.cleanSvg = prepared.markup;
+    state.sceneMap = prepared.map;
     state.status = tr.status.ready;
     render();
     requestAnimationFrame(playAnimation);
@@ -359,6 +443,47 @@ function applySvg(): void {
     const code = error instanceof Error ? error.message : 'invalid-svg';
     state.error = code === 'empty-svg' ? tr.errors.emptySvg : tr.errors.invalidSvg;
     state.cleanSvg = '';
+    state.sceneMap = null;
+    render();
+  }
+}
+
+async function prepareMotionStructure(): Promise<void> {
+  const tr = t(state.locale);
+  if (!state.cleanSvg) {
+    state.error = tr.errors.aiNeedsSvg;
+    updateStatus();
+    return;
+  }
+
+  resetAiResult();
+  state.aiBusy = true;
+  state.aiStage = tr.status.motionPreparing;
+  state.error = '';
+  render();
+  await nextFrame();
+
+  try {
+    const result = await requestMotionPreparation(state.cleanSvg, state.aiModel || undefined);
+    state.aiPlan = formatPlanText(result.text);
+    state.aiPlanMeta = `${result.provider} · ${result.model} · ${result.latencyMs}ms${result.fallbackUsed ? ` · ${tr.ai.fallback}` : ''}`;
+    const applied = applySemanticPreparation(state.cleanSvg, result.text);
+    state.cleanSvg = applied.markup;
+    state.sceneMap = applied.map;
+    state.semanticPrepared = applied.appliedCount > 0;
+    state.semanticSeparations = applied.preparation.separationSuggestions;
+    state.semanticPrepMeta = applied.appliedCount
+      ? `${tr.readiness.enriched} · ${applied.appliedCount} nodes · ${result.model}`
+      : `${result.model} · ${applied.preparation.separationSuggestions.length} separation hints`;
+    state.aiWarnings = [...applied.warnings, ...applied.map.warnings];
+    state.status = applied.appliedCount || applied.preparation.separationSuggestions.length
+      ? tr.status.motionPrepared
+      : tr.errors.motionPreparationEmpty;
+  } catch (error) {
+    setAiError(error, tr.errors.aiUnavailable);
+  } finally {
+    state.aiBusy = false;
+    state.aiStage = '';
     render();
   }
 }
