@@ -51,7 +51,7 @@ export const en = {
     groups: 'Groups',
     semantic: 'Semantic nodes',
     splitCandidates: 'Needs splitting',
-    analyze: 'Analyze parts with AI',
+    analyze: '1 · Analyze parts with AI',
     analyzing: 'Analyzing parts…',
     enriched: 'AI-enriched map',
     detected: 'Detected parts',
@@ -65,20 +65,27 @@ export const en = {
     section: '06 · AI MOTION DIRECTOR',
     model: 'Free model',
     prompt: 'Describe the animation',
-    promptPlaceholder: 'e.g. Make the main character breathe subtly, blink, and let the secondary shapes drift very gently…',
-    autoHint: 'Empty prompt = automatic motion for key elements. AI receives both SVG structure and a visual render.',
-    generate: '✨ Animate with AI',
+    promptPlaceholder: 'e.g. Make the character perform a cartwheel, then settle into a yoga pose; move arms and legs around their joints…',
+    autoHint: 'Part preparation is analysis, not the animation itself. Describe motion here. Empty prompt = automatic motion for key elements.',
+    generate: '2 · ✨ Create and play animation',
     generating: 'AI is creating motion…',
-    suggestVariants: 'Suggest 3 variants',
+    suggestVariants: '2 · Create 3 variants and play one',
     generatingVariants: 'AI is preparing variants…',
     variantsTitle: 'Animation variants',
-    applyVariant: 'Apply',
-    activeVariant: 'Selected',
+    applyVariant: 'Show on canvas',
+    activeVariant: 'Playing now',
     technicalDetails: 'Technical details',
-    rawResponse: 'Model response',
+    rawResponse: 'Raw model response',
     noModels: 'Free-model list is unavailable; the backend will use its default route.',
     fallback: 'fallback used',
-    partial: 'partially applied'
+    partial: 'partially applied',
+    waitHint: 'Request sent. This usually takes from a few seconds up to a minute; the result will start on the canvas automatically.',
+    resultTitle: 'AI RESULT',
+    motionPlaying: 'AI animation is already playing on the canvas',
+    variantsPlaying: 'Variants are ready — one is already playing',
+    resultHint: 'Choose another variant below and the canvas will switch immediately.',
+    semanticReady: 'Parts are mapped — this is not the animation yet',
+    semanticReadyHint: 'Now describe the motion in AI Motion Director and press the animation button.'
   },
   status: {
     cleaning: 'Cleaning SVG…',
@@ -93,7 +100,7 @@ export const en = {
     aiValidating: 'Validating Motion Spec…',
     aiApplying: 'Applying animation…',
     aiReady: 'AI animation applied',
-    variantsReady: 'Variants are ready — choose one'
+    variantsReady: 'Variants are ready; the selected one is already playing'
   },
   errors: {
     invalidSvg: 'The input is not a valid SVG.',
@@ -102,7 +109,7 @@ export const en = {
     aiUnavailable: 'AI animation is currently unavailable.',
     aiNeedsSvg: 'Apply an SVG before running AI animation.',
     aiInvalidSpec: 'The model responded, but no executable animation could be produced.',
-    aiNoVariants: 'The model did not return any usable animation variants.',
+    aiNoVariants: 'The model responded, but no returned variant could be converted into executable motion.',
     motionPreparationEmpty: 'AI responded, but no existing SVG nodes could be enriched.'
   },
   footer: { note: 'Motion-Ready SVG + AI Motion Director' }
