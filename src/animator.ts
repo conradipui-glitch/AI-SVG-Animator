@@ -11,7 +11,19 @@ export interface MotionOptions {
   loop: boolean;
 }
 
+type MotionGlobal = typeof globalThis & {
+  __AI_SVG_ACTIVE_MOTION_SPEC__?: MotionSpec | null;
+};
+
 let activeTimeline: gsap.core.Timeline | null = null;
+
+function setActiveMotionSpec(spec: MotionSpec | null): void {
+  (globalThis as MotionGlobal).__AI_SVG_ACTIVE_MOTION_SPEC__ = spec;
+}
+
+export function getActiveMotionSpec(): MotionSpec | null {
+  return (globalThis as MotionGlobal).__AI_SVG_ACTIVE_MOTION_SPEC__ ?? null;
+}
 
 export function stopAnimation(): void {
   activeTimeline?.kill();
@@ -20,6 +32,7 @@ export function stopAnimation(): void {
 
 export function animateSvg(svg: SVGSVGElement, options: MotionOptions): void {
   stopAnimation();
+  setActiveMotionSpec(null);
   const elements = getAnimatableElements(svg);
   if (!elements.length) return;
 
@@ -35,6 +48,7 @@ export function animateSvg(svg: SVGSVGElement, options: MotionOptions): void {
 
 export function animateMotionSpec(svg: SVGSVGElement, spec: MotionSpec): void {
   stopAnimation();
+  setActiveMotionSpec(spec);
   const allElements = getAnimatableElements(svg);
   gsap.killTweensOf(allElements);
   gsap.set(allElements, { clearProps: 'transform,opacity,transformOrigin,strokeDasharray,strokeDashoffset,fillOpacity' });
