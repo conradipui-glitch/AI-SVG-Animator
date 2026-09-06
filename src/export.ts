@@ -28,7 +28,8 @@ export function buildStandaloneHtml(
   body{display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box}
   .stage{width:min(900px,100%);aspect-ratio:16/10;display:grid;place-items:center;background:#0b172b;border:1px solid #29466f;border-radius:24px;overflow:hidden}
   svg{width:88%;height:88%;overflow:visible}
-  [data-animator-target="true"]{transform-box:fill-box;transform-origin:center}
+  [data-animator-target="true"],[data-animator-motion-target="true"]{transform-box:fill-box}
+  [data-animator-target="true"]{transform-origin:center}
 </style>
 </head>
 <body>
@@ -48,6 +49,14 @@ function cssEase(value){
     'power2.inOut':'cubic-bezier(.455,.03,.515,.955)','back.out':'cubic-bezier(.175,.885,.32,1.275)'
   };
   return map[value]||'ease-in-out';
+}
+function pivotOrigin(el){
+  const pivot=el.dataset.animatorPivot;
+  if(pivot==='bottom-center')return '50% 100%';
+  if(pivot==='top-center')return '50% 0%';
+  if(pivot==='left-center')return '0% 50%';
+  if(pivot==='right-center')return '100% 50%';
+  return '50% 50%';
 }
 function reveal(){elements.forEach((el,i)=>el.animate([{opacity:0,transform:'scale('+(1-options.intensity*.16)+')'},{opacity:1,transform:'scale(1)'}],{duration,delay:i*Math.min(80,duration/Math.max(elements.length,8)),easing:'cubic-bezier(.2,.8,.2,1)',fill:'both',iterations}));}
 function floatMotion(){const amp=4+options.intensity*18;elements.forEach((el,i)=>el.animate([{transform:'translateY(0) rotate(0deg)'},{transform:'translateY('+((i%2?1:-1)*amp)+'px) rotate('+((i%3-1)*(0.5+options.intensity*2.5))+'deg)'},{transform:'translateY(0) rotate(0deg)'}],{duration:duration*2,delay:i*35,easing:'ease-in-out',iterations}));}
@@ -83,6 +92,8 @@ function animateSpec(spec){
     if(!id)return;
     const el=document.getElementById(id);
     if(!el||!svg.contains(el))return;
+    el.style.transformBox='fill-box';
+    el.style.transformOrigin=pivotOrigin(el);
     if(track.effect==='draw'){animateDraw(el,track,specIterations);return;}
     const from=track.from||{};const to=track.to||{};
     const fromFrame={};const toFrame={};
