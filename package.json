@@ -1,0 +1,19 @@
+{
+  "name": "ai-svg-animator",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "dompurify": "3.4.14",
+    "gsap": "3.15.0"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}
