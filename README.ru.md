@@ -6,39 +6,55 @@
 
 <h1 align="center">AI SVG Animator</h1>
 <p align="center"><strong>Превращает идеи в живые векторы.</strong></p>
-<p align="center">SVG → Движение → Веб · AI Motion Director уже подключён · Промпт → SVG — следующий этап</p>
+<p align="center">SVG → AI Motion → Веб · Визуальный + структурный анализ · Автоварианты</p>
 
 <p align="center">
+  <a href="https://ai-svg-animator.conradipui.workers.dev"><strong>Открыть приложение</strong></a> ·
   <a href="./docs/PRODUCT_PLAN.md">План продукта</a> ·
+  <a href="./docs/MILESTONE_2_1.md">Milestone 2.1</a> ·
   <a href="./docs/MOTION_SPEC.md">Motion Spec</a> ·
-  <a href="./docs/MODEL_ROUTING.md">Маршрутизация моделей</a> ·
-  <a href="./docs/DEPLOY.md">Деплой</a> ·
-  <a href="./docs/LOCALIZATION.md">Локализация</a>
+  <a href="./docs/MODEL_ROUTING.md">Маршрутизация моделей</a>
 </p>
 
 ## Текущий билд
 
-**Static Animator реализован, а первый контур AI Motion Director уже связан end-to-end.**
+**Static Animator завершён, а Milestone 2.1 AI Motion сейчас находится в состоянии production candidate.**
 
-Приложение уже умеет:
+Живое приложение уже умеет:
 
 - вставлять SVG-код или загружать `.svg`;
 - удалять небезопасную разметку через DOMPurify;
 - нормализовать `viewBox` и назначать стабильные animation targets;
 - показывать результат на живом холсте;
-- применять **Reveal / Draw / Float**;
+- применять deterministic presets **Reveal / Draw / Float**;
 - настраивать длительность, интенсивность и цикл;
 - переключать весь UI **RU / EN** без потери текущей работы;
 - выбирать доступную бесплатную модель B.AI;
-- принимать текстовое описание желаемой анимации или работать автоматически при пустом поле;
-- отправлять модели компактную карту SVG-узлов вместо всего сырого файла;
+- описывать движение естественным языком и один раз нажимать **«✨ Анимировать с AI»**;
+- использовать пустой промпт для автоматической умеренной анимации;
+- рендерить SVG в PNG и передавать визуальный образ мультимодальной модели, когда она это поддерживает;
+- передавать одновременно структурный контекст SVG: target IDs, иерархию, стили и фрагменты геометрии;
 - валидировать возвращённый **Motion Spec v1** по реальным ID текущего SVG;
-- автоматически исполнять корректный AI motion plan через GSAP;
-- безопасно возвращаться к deterministic presets, если AI-ответ некорректен или недоступен;
+- сохранять рабочие tracks, даже если часть AI-ответа некорректна;
+- автоматически запускать корректную AI-анимацию через GSAP без второй кнопки применения;
+- генерировать три автоматических направления: **Subtle / Natural / Expressive**;
+- применять выбранный вариант прямо из его карточки;
+- показывать provider/model/validation diagnostics в раскрываемом блоке **«Технические детали»**;
 - скачивать нормализованный SVG;
-- экспортировать автономный HTML для preset-анимации.
+- экспортировать текущую preset- или AI-анимацию в автономный HTML.
 
-Следующий крупный этап подключает **RouterAI / Recraft Vector**, после чего пользователь сможет начинать с текстового описания, а не с готового SVG.
+### Статус production AI
+
+Автоматические production smoke-tests сейчас проходят на:
+
+`https://ai-svg-animator.conradipui.workers.dev`
+
+- B.AI health / model discovery: OK;
+- `glm-5.3-flash` motion generation: HTTP 200, получен валидный Motion Spec;
+- генерация трёх auto variants: HTTP 200, получены Subtle / Natural / Expressive;
+- provider keys остаются только на серверной стороне в Cloudflare Worker Secrets.
+
+Перед окончательным закрытием Milestone 2.1 остаётся авторский browser QA на нескольких реальных SVG. Подробности: [`docs/MILESTONE_2_1.md`](./docs/MILESTONE_2_1.md).
 
 ## Как это работает
 
@@ -55,24 +71,29 @@ DOMPurify sanitizer
    ▼
 SVG normalizer + стабильные animation targets
    │
-   ├──────── deterministic presets ────────┐
-   │                                        │
-   ▼                                        │
-compact node map                            │
-   │                                        │
-   ▼                                        │
-B.AI / резерв Cloudflare AI                 │
-   │                                        │
-   ▼                                        │
-Motion Spec v1                              │
-   │                                        │
-   ▼                                        │
-allowlist + clamps + проверка target IDs    │
-   │                                        │
-   └──────────────► GSAP renderer ◄─────────┘
-                         │
-                         ▼
-                      Превью
+   ├──────── deterministic presets ───────────────┐
+   │                                               │
+   ├──► PNG-рендер для визуального анализа         │
+   │                                               │
+   └──► структура SVG / IDs / геометрия            │
+                │                                  │
+                ▼                                  │
+       мультимодальная модель B.AI                 │
+       + резерв Cloudflare                         │
+                │                                  │
+                ├──► один Motion Spec              │
+                └──► 3 auto variants               │
+                │                                  │
+                ▼                                  │
+      allowlist + clamps + validation              │
+                │                                  │
+                └────────► GSAP renderer ◄─────────┘
+                                 │
+                                 ▼
+                           Живое превью
+                                 │
+                                 ▼
+                         автономный HTML
 ```
 
 ## Зачем нужен этот проект
@@ -82,6 +103,8 @@ allowlist + clamps + проверка target IDs    │
 AI SVG Animator строит более короткий путь:
 
 > **Опиши или принеси вектор → оживи его → отправь в веб.**
+
+Долгосрочная цель — **AI Motion Director**, который понимает сцену по смыслу, готовит изображение к движению, предлагает несколько сценариев и в дальнейшем сможет перестраивать векторную геометрию, если исходник плохо подготовлен к анимации.
 
 ## Маршрутизация AI
 
@@ -127,22 +150,23 @@ npm run check:worker
 
 - **Vite 8** — frontend build / dev server
 - **TypeScript 7** — типизированный application layer
-- **GSAP 3.15** — SVG animation runtime
+- **GSAP 3.15** — runtime живой SVG-анимации
 - **DOMPurify 3.4** — очистка SVG перед inline-рендером
 - **Cloudflare Workers** — API boundary + static deployment
 - **Cloudflare Workers AI** — резервный AI-маршрут
 - **B.AI OpenAI-compatible API** — пул бесплатных моделей для MVP
-- браузерный **Web Animations API** — автономная preset-анимация экспортированного HTML
+- browser **Canvas** — SVG → PNG visual context для мультимодального анализа
+- browser **Web Animations API** — автономный HTML-export preset- и AI Motion Spec-анимаций
 
 ## Структура
 
 ```text
 src/
-├── ai.ts             # AI API client + compact node-map prompt
+├── ai.ts             # AI API client + visual/structural scene context
 ├── animator.ts       # presets + Motion Spec GSAP executor
-├── export.ts         # автономный HTML + скачивание файлов
-├── main.ts           # состояние, UI и взаимодействия
-├── motion-spec.ts    # Motion Spec v1 parser / validator
+├── export.ts         # standalone preset / AI animation HTML export
+├── main.ts           # состояние, one-click AI motion, UI и variants
+├── motion-spec.ts    # tolerant Motion Spec v1 parser / validator
 ├── sample.ts         # встроенный демонстрационный вектор
 ├── styles.css        # Vector Laboratory × Motion Studio UI
 ├── svg.ts            # sanitization + normalization
@@ -153,7 +177,7 @@ src/
     └── types.ts
 
 worker/
-└── index.ts           # B.AI routes + Cloudflare fallback
+└── index.ts           # B.AI motion/variants/vision routes + Cloudflare fallback
 ```
 
 ## Визуальное направление
@@ -192,41 +216,49 @@ MVP двуязычный:
 - live preview;
 - duration / intensity / loop;
 - экспорт очищенного SVG;
-- экспорт автономного preset HTML.
+- автономный preset HTML export.
 
-### 🟡 AI Motion foundation — реализован
-- B.AI routing;
-- Cloudflare fallback chain;
-- текстовый motion prompt;
-- compact SVG node map;
-- Motion Spec v1;
-- target/effect validation;
-- автоматическое GSAP-исполнение корректного AI-плана.
+### 🟢 Milestone 2.1 — AI Motion Fix + Auto Variants
+- live B.AI motion route проверен;
+- one-click **«Анимировать с AI»**;
+- визуальный рендер + структурный SVG-контекст;
+- strict/tolerant Motion Spec validation;
+- автоматическое GSAP-воспроизведение;
+- варианты Subtle / Natural / Expressive;
+- диагностика / partial validation;
+- автономный export AI-анимации;
+- остаётся финальный ручной browser acceptance.
 
-### ▶ Milestone 2 — AI SVG generation
-- RouterAI / Recraft Vector adapter;
-- prompt → SVG;
-- prompt → SVG → animation end-to-end;
-- provider errors / rate handling;
-- публичный Cloudflare deployment.
+### ▶ Milestone 2.2 — Motion-Ready SVG Preparation
+- semantic grouping;
+- подготовка pivot points с учётом геометрии;
+- определение элементов, которые надо разделить перед анимацией;
+- редактируемые semantic labels;
+- основа AI-assisted topology reconstruction.
 
-### Milestone 3+ — Semantic scene motion
-- vision-анализ сцены;
-- semantic SVG groups;
-- автоматический выбор ключевых объектов;
-- image / scene decomposition;
-- layered и hybrid scene animation;
-- несколько вариантов motion.
+### Milestone 3 — Semantic Motion Director
+- более глубокое понимание сцены;
+- семантика персонажей / объектов;
+- интеллектуальная перестройка элементов под анимацию;
+- сценическая хореография;
+- prompt-driven и automatic motion на основе смысла изображения.
+
+### Поздние input / generation layers
+- prompt → SVG generation;
+- raster image → motion-ready vector;
+- Universal Import Layer для SVG/SVGZ, EPS/PS/AI/PDF и затем дополнительных vector-форматов;
+- layered / hybrid SVG + raster scenes.
 
 ### Public MVP polish
 - responsive QA;
-- реальный demo asset / анимированный пример README;
-- smoke tests;
+- реальный demo asset / анимированный README-пример, сделанный самим инструментом;
+- расширенные browser fixture tests;
 - эксперименты с Lottie / video export.
 
 ## Документы
 
 - [`docs/PRODUCT_PLAN.md`](./docs/PRODUCT_PLAN.md) — гипотеза, архитектура и этапы.
+- [`docs/MILESTONE_2_1.md`](./docs/MILESTONE_2_1.md) — текущее ТЗ и acceptance AI Motion.
 - [`docs/MOTION_SPEC.md`](./docs/MOTION_SPEC.md) — контролируемый контракт AI → renderer.
 - [`docs/MODEL_ROUTING.md`](./docs/MODEL_ROUTING.md) — B.AI + Cloudflare routing.
 - [`docs/DEPLOY.md`](./docs/DEPLOY.md) — безопасный Cloudflare deployment.
