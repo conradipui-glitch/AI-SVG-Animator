@@ -35,6 +35,22 @@ export interface TranslationSchema {
     floatDesc: string;
   };
   controls: { section: string; duration: string; intensity: string; loop: string };
+  readiness: {
+    section: string;
+    score: string;
+    groups: string;
+    semantic: string;
+    splitCandidates: string;
+    analyze: string;
+    analyzing: string;
+    enriched: string;
+    detected: string;
+    separationTitle: string;
+    noSeparation: string;
+    low: string;
+    medium: string;
+    high: string;
+  };
   ai: {
     section: string;
     model: string;
@@ -60,6 +76,8 @@ export interface TranslationSchema {
     ready: string;
     exported: string;
     loaded: string;
+    motionPreparing: string;
+    motionPrepared: string;
     aiPreparing: string;
     aiRequesting: string;
     aiValidating: string;
@@ -75,6 +93,7 @@ export interface TranslationSchema {
     aiNeedsSvg: string;
     aiInvalidSpec: string;
     aiNoVariants: string;
+    motionPreparationEmpty: string;
   };
   footer: { note: string };
 }
