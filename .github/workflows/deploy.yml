@@ -56,3 +56,25 @@ jobs:
           fi
           printf '%s' "$BAI_API_KEY" | npx wrangler secret put BAI_API_KEY
           echo "B.AI Worker secret configured"
+
+      - name: Smoke-test production AI backend
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          APP_URL="https://ai-svg-animator.conradipui.workers.dev"
+          echo "Health:"
+          curl --retry 4 --retry-delay 2 --fail-with-body --show-error --silent "$APP_URL/api/ai/health" || true
+          echo
+          echo "Motion route:"
+          status=$(curl --retry 3 --retry-delay 2 --show-error --silent \
+            -o /tmp/motion-smoke.json -w '%{http_code}' \
+            -X POST "$APP_URL/api/ai/motion" \
+            -H 'content-type: application/json' \
+            --data '{"model":"glm-5.3-flash","prompt":"Return a Motion Spec v1 JSON object only. Allowed target: #demo. Create one subtle translate track for #demo."}')
+          cat /tmp/motion-smoke.json
+          echo
+          echo "HTTP $status"
+          if [ "$status" != "200" ]; then
+            exit 1
+          fi
