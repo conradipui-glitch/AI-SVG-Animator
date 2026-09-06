@@ -6,27 +6,30 @@
 
 <h1 align="center">AI SVG Animator</h1>
 <p align="center"><strong>Превращает идеи в живые векторы.</strong></p>
-
-<p align="center">Промпт → SVG → Движение → Анимация</p>
+<p align="center">SVG → Движение → Веб · Промпт → SVG — следующий этап</p>
 
 <p align="center">
   <a href="./docs/PRODUCT_PLAN.md">План продукта</a> ·
   <a href="./docs/LOCALIZATION.md">Локализация</a>
 </p>
 
-## Что это такое?
+## Текущий билд
 
-**AI SVG Animator** — веб-инструмент, который превращает текстовую идею, растровый референс или существующий SVG в управляемый анимированный векторный ассет.
+**Milestone 1 — Static Animator реализован.**
 
-Первый публичный MVP строится вокруг простого пайплайна:
+Приложение уже может взять существующий SVG и превратить его в управляемую веб-анимацию:
 
-- генерация SVG через **RouterAI / Recraft Vector**;
-- очистка и нормализация SVG;
-- применение анимации сначала через пресеты, затем через Motion Spec / AI-planner;
-- live preview результата;
-- экспорт **HTML + SVG** для веба.
+- вставить SVG-код или загрузить `.svg` файл;
+- удалить небезопасную разметку через DOMPurify;
+- нормализовать размеры / `viewBox` и разметить анимируемую геометрию;
+- показать результат на живом холсте;
+- применить **Появление / Reveal**, **Прорисовку / Draw** или **Парение / Float**;
+- настроить длительность, интенсивность и цикл;
+- мгновенно переключить весь UI **RU / EN**, не теряя текущую работу;
+- скачать очищенный SVG;
+- экспортировать **автономный HTML**, которому не нужен CDN во время воспроизведения.
 
-Цель проекта — не магия AI сама по себе, а процесс, который одновременно **быстрый**, **редактируемый** и **веб-нативный**.
+Следующий milestone подключает **RouterAI / Recraft Vector**, после чего начинать можно будет уже с текстового промпта.
 
 ## Как это работает
 
@@ -34,138 +37,138 @@
   <img src="./assets/pipeline-ru.svg" alt="AI SVG Animator pipeline" width="100%" />
 </p>
 
-1. **Промпт или SVG на входе** — пользователь описывает идею или приносит свой SVG.
-2. **Генерация и очистка SVG** — создаётся редактируемый вектор и затем нормализуется.
-3. **Добавление движения** — сначала через простые пресеты, позже через AI-generated Motion Spec.
-4. **Превью и экспорт** — базовая настройка параметров и выгрузка готового результата.
+```text
+SVG на входе
+   │
+   ▼
+DOMPurify sanitizer
+   │
+   ▼
+SVG normalizer + стабильные animation targets
+   │
+   ▼
+GSAP preview engine
+   ├── Reveal
+   ├── Draw
+   └── Float
+   │
+   ▼
+Live preview + экспорт SVG / автономного HTML
+```
 
 ## Зачем нужен этот проект
 
-Создание анимированных SVG-ассетов часто попадает в неудобную серую зону: AI-генераторы изображений обычно заканчиваются на растровом результате, дизайн-инструменты умеют отдавать вектор, но плохо автоматизируют motion, а полноценные motion-пакеты тяжеловаты для быстрых продуктовых задач. Разработчику или дизайнеру часто нужен просто **чистый анимированный ассет прямо сейчас**.
+Анимированный SVG находится в неудобной промежуточной зоне: AI-генераторы обычно заканчиваются на растре, дизайн-инструменты умеют экспортировать вектор, но плохо автоматизируют motion, а полноценные motion-пакеты избыточны для быстрой продуктовой работы.
 
-AI SVG Animator пытается закрыть именно этот разрыв.
+AI SVG Animator строит более короткий путь:
 
-## Фокус MVP
+> **Опиши или принеси вектор → оживи его → отправь в веб.**
 
-### P0 — первый публичный билд
+## Локальный запуск
 
-- ввод промпта;
-- вставка / загрузка существующего SVG;
-- интеграция RouterAI / Recraft Vector;
-- sanitization + normalization SVG;
-- live preview;
-- 3 motion-пресета: **Reveal**, **Draw**, **Float**;
-- управление длительностью, интенсивностью и циклом;
-- экспорт самодостаточного HTML;
-- скачивание исходного / нормализованного SVG;
-- деплой на Cloudflare без утечки секретов в клиент или репозиторий.
+Нужна современная версия Node.js, поддерживаемая Vite 8.
 
-### Следующие улучшения
+```bash
+git clone https://github.com/conradipui-glitch/AI-SVG-Animator.git
+cd AI-SVG-Animator
+npm install
+npm run dev
+```
 
-- семантический анализ SVG;
-- Motion Spec JSON;
-- AI motion planner;
-- экспорт в Lottie;
-- animated SVG / GIF / WebM export;
-- библиотека пресетов;
-- сохранение и шаринг проектов.
+Production build:
 
-## Планируемая архитектура
+```bash
+npm run build
+npm run preview
+```
+
+## Стек
+
+- **Vite 8** — frontend build / dev server
+- **TypeScript 7** — типизированный application layer
+- **GSAP 3.15** — live SVG animation runtime
+- **DOMPurify 3.4** — очистка SVG перед inline-рендером
+- браузерный **Web Animations API** — автономная анимация экспортированного HTML
+
+## Структура
 
 ```text
-Промпт / SVG / Растр
-        │
-        ▼
-Input Gateway
-        │
-        ├── text → RouterAI / Recraft Vector
-        ├── SVG → validation
-        └── raster → vectorizer (later)
-        │
-        ▼
-SVG Sanitizer + Normalizer
-        │
-        ▼
-SVG Analyzer
-        │
-        ▼
-Motion Planner
-   presets / AI
-        │
-        ▼
-Motion Spec JSON
-        │
-        ▼
-Renderer (GSAP)
-        │
-        ├── Live Preview
-        ├── HTML export
-        ├── SVG export
-        └── Lottie / video exporters (later)
+src/
+├── animator.ts       # Reveal / Draw / Float на GSAP
+├── export.ts         # автономный HTML + скачивание файлов
+├── main.ts           # состояние, UI и взаимодействия
+├── sample.ts         # встроенный демонстрационный вектор
+├── styles.css        # Vector Laboratory × Motion Studio UI
+├── svg.ts            # sanitization + normalization
+└── i18n/
+    ├── index.ts      # определение языка + сохранение выбора
+    ├── en.ts
+    ├── ru.ts
+    └── types.ts
 ```
 
 ## Визуальное направление
 
-В основе оформления репозитория и продукта лежит направление:
+Продукт использует стиль **Vector Laboratory × Motion Studio**:
 
-> **Vector Laboratory × Motion Studio**
+- глубокая navy / graphite база;
+- сдержанный electric-blue;
+- язык Bézier-кривых, anchor points и motion paths;
+- ощущение гибрида дизайн-инструмента и developer tool.
 
-Глубокая navy / graphite база, сдержанные electric-blue акценты, Bézier-кривые, anchor points, motion paths и ощущение гибрида дизайн-инструмента и developer tool.
-
-Сознательно избегаем стандартной эстетики «магический неоновый AI SaaS» 😄
-
-## Статус репозитория
-
-Текущая стадия: **foundation + documentation + visual direction**.
-
-Следующий технический шаг — реальный каркас MVP: SVG input, normalizer, deterministic presets, preview, export, затем RouterAI generation и Cloudflare deployment.
+И да — без обязательного мистического неонового AI-мозга 😄
 
 ## Локализация
 
-Сервис двуязычный уже в первом MVP:
+MVP двуязычный:
 
 - **English**
 - **Русский**
 
-Главный сигнал для языка по умолчанию — язык браузера / системы. География используется только как fallback. Ручной выбор всегда важнее автоопределения и сохраняется локально.
+Приоритет: сохранённый ручной выбор → язык браузера / системы → географический fallback → English. Ручной выбор всегда главный и сохраняется локально.
 
 Подробности: [`docs/LOCALIZATION.md`](./docs/LOCALIZATION.md).
 
-## Документы
-
-- [`docs/PRODUCT_PLAN.md`](./docs/PRODUCT_PLAN.md) — продуктовая гипотеза, архитектура, этапы, объём MVP.
-- [`docs/LOCALIZATION.md`](./docs/LOCALIZATION.md) — стратегия RU / EN для приложения и репозитория.
-
 ## Дорожная карта
 
-### Milestone 0 — foundation
+### ✅ Milestone 0 — foundation
 - план продукта;
-- стратегия локализации;
-- README / brand direction;
-- структура проекта;
-- Cloudflare config.
+- двуязычный README и visual identity;
+- архитектура локализации.
 
-### Milestone 1 — static animator
-- SVG input;
-- normalizer;
-- deterministic presets;
-- preview;
-- HTML export.
+### ✅ Milestone 1 — Static Animator
+- вставка / загрузка SVG;
+- sanitizer + normalizer;
+- Reveal / Draw / Float;
+- live preview;
+- duration / intensity / loop;
+- экспорт очищенного SVG;
+- экспорт автономного HTML.
 
-### Milestone 2 — AI SVG generation
-- RouterAI / Recraft integration;
-- prompt → SVG → animation end-to-end.
+### ▶ Milestone 2 — AI SVG generation
+- RouterAI / Recraft Vector adapter;
+- prompt → SVG;
+- prompt → SVG → animation end-to-end;
+- обработка ошибок / rate limits;
+- Cloudflare Worker boundary для секретов.
 
 ### Milestone 3 — AI motion
-- semantic analyzer;
-- Motion Spec;
-- AI motion planner.
+- semantic SVG analyzer;
+- Motion Spec JSON;
+- AI motion planner;
+- редактируемые motion-вариации.
 
 ### Milestone 4 — public MVP polish
-- responsive UI;
-- real demo assets;
 - deployment;
-- smoke tests.
+- responsive QA;
+- реальный demo asset / анимированный пример в README;
+- smoke tests;
+- эксперименты с Lottie / video export.
+
+## Документы
+
+- [`docs/PRODUCT_PLAN.md`](./docs/PRODUCT_PLAN.md) — гипотеза, архитектура и этапы.
+- [`docs/LOCALIZATION.md`](./docs/LOCALIZATION.md) — стратегия RU / EN.
 
 ## Видение
 
