@@ -45,17 +45,32 @@ export const ru = {
     intensity: 'Интенсивность',
     loop: 'Цикл'
   },
+  ai: {
+    section: '05 · AI MOTION DIRECTOR',
+    model: 'Бесплатная модель',
+    prompt: 'Опиши анимацию',
+    promptPlaceholder: 'Например: главный персонаж слегка дышит и моргает, а второстепенные элементы очень мягко покачиваются…',
+    autoHint: 'Оставь поле пустым для автоматической анимации. По умолчанию ИИ должен оживлять только ключевые элементы.',
+    generate: 'Создать Motion Plan',
+    generating: 'Продумываем движение…',
+    planTitle: 'Motion Plan',
+    noModels: 'Список бесплатных моделей недоступен; backend использует маршрут по умолчанию.',
+    fallback: 'использован резерв'
+  },
   status: {
     cleaning: 'Очищаем SVG…',
     animating: 'Анимируем…',
     ready: 'Готово',
     exported: 'HTML экспортирован',
-    loaded: 'SVG загружен'
+    loaded: 'SVG загружен',
+    aiReady: 'AI Motion Plan готов'
   },
   errors: {
     invalidSvg: 'Введённая разметка не является корректным SVG.',
     emptySvg: 'Сначала вставь или загрузи SVG.',
-    readFile: 'Не удалось прочитать SVG-файл.'
+    readFile: 'Не удалось прочитать SVG-файл.',
+    aiUnavailable: 'AI-планирование движения временно недоступно.',
+    aiNeedsSvg: 'Сначала примени SVG, а затем попроси ИИ построить Motion Plan.'
   },
-  footer: { note: 'Static Animator · Milestone 1' }
+  footer: { note: 'Static Animator + AI Motion routing' }
 } satisfies TranslationSchema;
