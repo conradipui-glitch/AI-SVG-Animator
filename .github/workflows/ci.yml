@@ -21,5 +21,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Typecheck and build
+      - name: Typecheck and build frontend
         run: npm run build
+
+      - name: Validate Worker bundle
+        run: npm run check:worker
