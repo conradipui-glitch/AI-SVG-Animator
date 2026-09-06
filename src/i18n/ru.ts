@@ -3,44 +3,59 @@ import type { TranslationSchema } from './types';
 export const ru = {
   app: {
     name: 'AI SVG Animator',
-    tagline: 'Превращает идеи в живые векторы.'
+    tagline: 'Превращает идеи в живые векторы.',
+    lab: 'VECTOR LABORATORY',
+    studio: 'MOTION STUDIO'
   },
-  language: {
-    english: 'English',
-    russian: 'Русский'
-  },
+  language: { english: 'English', russian: 'Русский' },
   input: {
-    promptLabel: 'Промпт',
-    promptPlaceholder: 'Опишите вектор, который хотите создать…',
-    svgLabel: 'SVG',
-    uploadSvg: 'Загрузить SVG'
+    section: '01 · SVG НА ВХОДЕ',
+    svgLabel: 'Вставь SVG',
+    svgHint: 'Скрипты и небезопасная разметка удаляются до превью.',
+    uploadSvg: 'Загрузить SVG',
+    loadSample: 'Загрузить пример',
+    placeholder: '<svg viewBox="0 0 400 400">…</svg>'
+  },
+  workspace: {
+    section: '02 · ЖИВОЙ ХОЛСТ',
+    emptyTitle: 'Ждём вектор',
+    emptyBody: 'Вставь SVG, загрузи файл или открой пример.',
+    cleanBadge: 'ОЧИЩЕННЫЙ SVG'
   },
   actions: {
-    generate: 'Создать SVG',
+    applySvg: 'Применить SVG',
     animate: 'Анимировать',
+    replay: 'Повторить',
     exportHtml: 'Экспорт HTML',
     downloadSvg: 'Скачать SVG',
     reset: 'Сбросить'
   },
   presets: {
-    reveal: 'Проявление',
+    section: '03 · ПРЕСЕТ ДВИЖЕНИЯ',
+    reveal: 'Появление',
+    revealDesc: 'Плавное появление, масштаб и stagger.',
     draw: 'Прорисовка',
-    float: 'Парение'
+    drawDesc: 'Обводка геометрии с возвратом заливки.',
+    float: 'Парение',
+    floatDesc: 'Мягкий подъём и вращение по циклу.'
   },
   controls: {
+    section: '04 · НАСТРОЙКИ ДВИЖЕНИЯ',
     duration: 'Длительность',
     intensity: 'Интенсивность',
     loop: 'Цикл'
   },
   status: {
-    generating: 'Генерируем SVG…',
-    normalizing: 'Очищаем SVG…',
+    cleaning: 'Очищаем SVG…',
     animating: 'Анимируем…',
-    ready: 'Готово'
+    ready: 'Готово',
+    exported: 'HTML экспортирован',
+    loaded: 'SVG загружен'
   },
   errors: {
-    invalidSvg: 'Не удалось проверить этот SVG.',
-    generationFailed: 'Не удалось создать SVG. Попробуйте ещё раз.',
-    network: 'Ошибка сети. Попробуйте ещё раз.'
-  }
+    invalidSvg: 'Введённая разметка не является корректным SVG.',
+    emptySvg: 'Сначала вставь или загрузи SVG.',
+    readFile: 'Не удалось прочитать SVG-файл.'
+  },
+  footer: { note: 'Static Animator · Milestone 1' }
 } satisfies TranslationSchema;
