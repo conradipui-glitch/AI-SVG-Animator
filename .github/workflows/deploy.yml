@@ -86,6 +86,18 @@ jobs:
           if [ "$motion_status" != "200" ]; then exit 1; fi
           node -e "const j=require('/tmp/motion-smoke.json'); const s=JSON.parse(j.text); if(s.version!==1 || !Array.isArray(s.tracks) || !s.tracks.length) process.exit(1); console.log('Motion spec OK via',j.provider,j.model)"
 
+          echo "Preparation route:"
+          prepare_status=$(curl --retry 3 --retry-delay 2 --show-error --silent \
+            -o /tmp/prepare-smoke.json -w '%{http_code}' \
+            -X POST "$APP_URL/api/ai/prepare" \
+            -H 'content-type: application/json' \
+            --data '{"model":"glm-5.3-flash","prompt":"Existing SVG IDs are bird, eye and wing. Map only these existing IDs into the required Motion-Ready preparation JSON. Treat bird as character, eye as eye and wing as wing. Never invent IDs."}')
+          cat /tmp/prepare-smoke.json
+          echo
+          echo "Preparation HTTP $prepare_status"
+          if [ "$prepare_status" != "200" ]; then exit 1; fi
+          node -e "const j=require('/tmp/prepare-smoke.json'); const p=JSON.parse(j.text); if(p.version!==1 || !Array.isArray(p.nodes) || !p.nodes.length) process.exit(1); const allowed=new Set(['bird','eye','wing']); if(p.nodes.some(n=>!allowed.has(String(n.id||'').replace(/^#/,'')))) process.exit(1); console.log('Semantic preparation OK via',j.provider,j.model)"
+
           echo "Variants route:"
           variants_status=$(curl --retry 3 --retry-delay 2 --show-error --silent \
             -o /tmp/variants-smoke.json -w '%{http_code}' \

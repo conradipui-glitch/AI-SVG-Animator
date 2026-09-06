@@ -93,11 +93,14 @@ const MOTION_SPEC_RULES = `Return JSON only. The response MUST use exactly this 
 Allowed effects: translate, rotate, scale, opacity, pulse, draw.
 Allowed easing values: none, linear, sine.in, sine.out, sine.inOut, power1.in, power1.out, power1.inOut, power2.in, power2.out, power2.inOut, back.out.
 Use ONLY target IDs explicitly supplied by the user input. Never invent selectors.
+Groups may be valid targets for whole-object motion when their IDs are supplied.
+Avoid conflicting transforms on a group and one of its descendants unless that hierarchy is deliberate.
 Prefer 1-8 meaningful tracks. Do not animate every path unless the user explicitly requests full-scene motion.
 Use conservative physically plausible values. Do not return JavaScript, CSS, markdown, prose, explanations, comments, or code fences.`;
 
 const MOTION_SYSTEM_PROMPT = `You are the AI Motion Director for AI SVG Animator.
 Understand the supplied artwork as a visual scene AND as a structured SVG document. Match semantic objects visible in the artwork to the supplied SVG element IDs and geometry metadata. Follow the user's animation intent. If no explicit intent is given, animate only key subjects plus a small amount of environment.
+Respect semantic pivot hints. Prefer a logical group target over separately moving all of its paths when the group represents one object.
 ${MOTION_SPEC_RULES}`;
 
 const VARIANTS_SYSTEM_PROMPT = `You are the AI Motion Director for AI SVG Animator.
@@ -115,6 +118,42 @@ Natural: balanced believable motion for key subjects and limited secondary motio
 Expressive: visibly stronger choreography while preserving readability and avoiding chaotic motion.
 Each motionSpec must follow these rules:
 ${MOTION_SPEC_RULES}`;
+
+const PREPARATION_SYSTEM_PROMPT = `You are the Motion-Ready SVG Preparation module for AI SVG Animator.
+Analyze the supplied rendered artwork AND SVG structure as a motion-design scene.
+Map visible logical objects and articulated parts to existing SVG IDs only. Never invent IDs or selectors.
+If a useful moving part such as an eye, hand, elbow, wheel, branch, wing, cloth section, hair section or other joint is visible but cannot be independently targeted because it is merged into a larger SVG path or group, add a separation suggestion instead of inventing a selector.
+Do not rewrite the SVG. Do not produce animation code.
+Return JSON only with exactly this shape:
+{
+  "version": 1,
+  "sceneSummary": "short description",
+  "nodes": [
+    {
+      "id": "existing-id",
+      "label": "human-readable object or part",
+      "role": "character",
+      "confidence": 0.9,
+      "pivot": "bottom-center",
+      "motionPotential": 0.85,
+      "recommendedEffects": ["translate", "rotate"]
+    }
+  ],
+  "separationSuggestions": [
+    {
+      "target": "#existing-id",
+      "reason": "why an independent part would improve articulated motion",
+      "priority": "medium"
+    }
+  ]
+}
+Allowed roles: background, character, body, head, eye, arm, hand, leg, foot, wing, hair, cloth, vehicle, wheel, plant, branch, leaf, cloud, smoke, water, light, text, decoration, unknown.
+Allowed pivots: center, bottom-center, top-center, left-center, right-center.
+Allowed effects: translate, rotate, scale, opacity, pulse, draw.
+Use values from 0 to 1 for confidence and motionPotential.
+Prefer a compact map of meaningful objects and parts instead of labeling every decorative path.
+For articulated parts choose a plausible joint-side pivot: limbs and wings pivot near their attachment, cloth/hair usually near the attached edge, wheels around center.
+No markdown, prose outside JSON, comments, code fences, JavaScript or CSS.`;
 
 const SCENE_SYSTEM_PROMPT = `You are the Scene Understanding module for AI SVG Animator.
 Analyze the supplied image as a motion-design scene, not merely as a captioning task.
@@ -440,6 +479,11 @@ async function handleVariants(request: Request, env: Env): Promise<Response> {
   return json(await routeMotionRequest(body, env, VARIANTS_SYSTEM_PROMPT));
 }
 
+async function handlePrepare(request: Request, env: Env): Promise<Response> {
+  const body = await readJsonBody(request);
+  return json(await routeMotionRequest(body, env, PREPARATION_SYSTEM_PROMPT));
+}
+
 async function handleVision(request: Request, env: Env): Promise<Response> {
   const body = await readJsonBody(request);
   const image = body.image;
@@ -530,6 +574,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (url.pathname === '/api/ai/reason') return await handleReason(request, env);
     if (url.pathname === '/api/ai/motion') return await handleMotion(request, env);
     if (url.pathname === '/api/ai/variants') return await handleVariants(request, env);
+    if (url.pathname === '/api/ai/prepare') return await handlePrepare(request, env);
     if (url.pathname === '/api/ai/vision') return await handleVision(request, env);
     return json({ error: 'Not found' }, { status: 404 });
   } catch (error) {
