@@ -50,12 +50,19 @@ export const ru = {
     model: 'Бесплатная модель',
     prompt: 'Опиши анимацию',
     promptPlaceholder: 'Например: главный персонаж слегка дышит и моргает, а второстепенные элементы очень мягко покачиваются…',
-    autoHint: 'Оставь поле пустым для автоматической анимации. По умолчанию ИИ должен оживлять только ключевые элементы.',
-    generate: 'Создать Motion Plan',
-    generating: 'Продумываем движение…',
-    planTitle: 'Motion Plan',
+    autoHint: 'Пустой запрос = автоматическая анимация ключевых элементов. ИИ получает структуру SVG и визуальный рендер.',
+    generate: '✨ Анимировать с AI',
+    generating: 'ИИ создаёт анимацию…',
+    suggestVariants: 'Предложить 3 варианта',
+    generatingVariants: 'ИИ готовит варианты…',
+    variantsTitle: 'Варианты анимации',
+    applyVariant: 'Применить',
+    activeVariant: 'Выбран',
+    technicalDetails: 'Технические детали',
+    rawResponse: 'Ответ модели',
     noModels: 'Список бесплатных моделей недоступен; backend использует маршрут по умолчанию.',
-    fallback: 'использован резерв'
+    fallback: 'использован резерв',
+    partial: 'частично применено'
   },
   status: {
     cleaning: 'Очищаем SVG…',
@@ -63,14 +70,21 @@ export const ru = {
     ready: 'Готово',
     exported: 'HTML экспортирован',
     loaded: 'SVG загружен',
-    aiReady: 'AI Motion Plan готов'
+    aiPreparing: 'Готовим SVG и визуальный рендер…',
+    aiRequesting: 'ИИ анализирует сцену и строит движение…',
+    aiValidating: 'Проверяем Motion Spec…',
+    aiApplying: 'Применяем анимацию…',
+    aiReady: 'AI-анимация применена',
+    variantsReady: 'Варианты готовы — выбери один'
   },
   errors: {
     invalidSvg: 'Введённая разметка не является корректным SVG.',
     emptySvg: 'Сначала вставь или загрузи SVG.',
     readFile: 'Не удалось прочитать SVG-файл.',
-    aiUnavailable: 'AI-планирование движения временно недоступно.',
-    aiNeedsSvg: 'Сначала примени SVG, а затем попроси ИИ построить Motion Plan.'
+    aiUnavailable: 'AI-анимация сейчас недоступна.',
+    aiNeedsSvg: 'Сначала примени SVG, а затем запусти AI-анимацию.',
+    aiInvalidSpec: 'Модель ответила, но не удалось получить исполняемую анимацию.',
+    aiNoVariants: 'Модель не вернула ни одного пригодного варианта анимации.'
   },
-  footer: { note: 'Static Animator + AI Motion routing' }
+  footer: { note: 'Static Animator + AI Motion Director' }
 } satisfies TranslationSchema;
