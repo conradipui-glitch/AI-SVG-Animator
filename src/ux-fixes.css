@@ -9,13 +9,28 @@
 
 .canvas {
   flex: none;
-  height: clamp(420px, 64vh, 680px);
+  height: clamp(420px, 62vh, 640px);
   min-height: 0;
+  overflow: hidden;
 }
 
 .svg-frame {
-  width: min(92%, 760px);
-  height: 92%;
+  width: min(86%, 720px);
+  height: 86%;
+  max-width: 86%;
+  max-height: 86%;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+}
+
+.svg-frame svg {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  overflow: visible;
 }
 
 .canvas-result {
@@ -150,14 +165,28 @@
 
 @media (max-width: 1100px) {
   .canvas {
-    height: min(66vh, 620px);
+    height: min(64vh, 600px);
+  }
+
+  .svg-frame {
+    width: 84%;
+    height: 84%;
+    max-width: 84%;
+    max-height: 84%;
   }
 }
 
 @media (max-width: 760px) {
   .canvas {
-    height: min(72vh, 560px);
+    height: min(70vh, 540px);
     min-height: 360px;
+  }
+
+  .svg-frame {
+    width: 82%;
+    height: 82%;
+    max-width: 82%;
+    max-height: 82%;
   }
 
   .canvas-result {

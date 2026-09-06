@@ -48,6 +48,7 @@ export function normalizeSvg(raw: string): NormalizedSvg {
     if (!group.id) group.id = `animator-group-${index + 1}`;
     group.dataset.animatorGroup = 'true';
     group.dataset.animatorMotionTarget = 'true';
+    group.dataset.animatorBaseTransform = group.getAttribute('transform') || '';
   });
 
   const elements = Array.from(svg.querySelectorAll<SVGGraphicsElement>(GRAPHIC_SELECTOR));
@@ -55,6 +56,7 @@ export function normalizeSvg(raw: string): NormalizedSvg {
     if (!element.id) element.id = `animator-node-${index + 1}`;
     element.dataset.animatorTarget = 'true';
     element.dataset.animatorMotionTarget = 'true';
+    element.dataset.animatorBaseTransform = element.getAttribute('transform') || '';
   });
 
   return {

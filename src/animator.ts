@@ -20,6 +20,10 @@ type SmilSvg = SVGSVGElement & {
   setCurrentTime?: (seconds: number) => void;
 };
 
+type GsapElement = SVGGraphicsElement & {
+  _gsap?: { uncache?: number };
+};
+
 let activeTimeline: gsap.core.Timeline | null = null;
 
 function setActiveMotionSpec(spec: MotionSpec | null): void {
@@ -38,12 +42,12 @@ export function stopAnimation(): void {
 export function animateSvg(svg: SVGSVGElement, options: MotionOptions): void {
   stopAnimation();
   pauseNativeSvgAnimations(svg);
+  stabilizeViewport(svg);
   setActiveMotionSpec(null);
   const elements = getAnimatableElements(svg);
   if (!elements.length) return;
 
-  gsap.killTweensOf(elements);
-  gsap.set(elements, { clearProps: 'transform,opacity,transformOrigin,strokeDasharray,strokeDashoffset,fillOpacity' });
+  restoreBaseState(elements);
 
   activeTimeline = options.preset === 'reveal'
     ? reveal(elements, options)
@@ -55,10 +59,10 @@ export function animateSvg(svg: SVGSVGElement, options: MotionOptions): void {
 export function animateMotionSpec(svg: SVGSVGElement, spec: MotionSpec): void {
   stopAnimation();
   pauseNativeSvgAnimations(svg);
+  stabilizeViewport(svg);
   setActiveMotionSpec(spec);
   const allElements = getMotionTargetElements(svg);
-  gsap.killTweensOf(allElements);
-  gsap.set(allElements, { clearProps: 'transform,opacity,transformOrigin,strokeDasharray,strokeDashoffset,fillOpacity' });
+  restoreBaseState(allElements);
 
   const tl = gsap.timeline({ repeat: spec.loop ? -1 : 0, repeatDelay: spec.loop ? 0.25 : 0 });
 
@@ -70,6 +74,36 @@ export function animateMotionSpec(svg: SVGSVGElement, spec: MotionSpec): void {
   }
 
   activeTimeline = tl;
+}
+
+function stabilizeViewport(svg: SVGSVGElement): void {
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  svg.style.display = 'block';
+}
+
+function restoreBaseState(elements: SVGGraphicsElement[]): void {
+  gsap.killTweensOf(elements);
+
+  elements.forEach((element) => {
+    const baseTransform = element.dataset.animatorBaseTransform ?? '';
+    const style = element.style;
+    style.removeProperty('transform');
+    style.removeProperty('transform-origin');
+    style.removeProperty('opacity');
+    style.removeProperty('fill-opacity');
+    style.removeProperty('stroke-dasharray');
+    style.removeProperty('stroke-dashoffset');
+
+    if (baseTransform) element.setAttribute('transform', baseTransform);
+    else element.removeAttribute('transform');
+
+    const gsapElement = element as GsapElement;
+    if (gsapElement._gsap) gsapElement._gsap.uncache = 1;
+  });
 }
 
 function pauseNativeSvgAnimations(svg: SVGSVGElement): void {
