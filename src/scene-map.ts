@@ -278,8 +278,9 @@ function annotateElement(element: SVGGraphicsElement): void {
 }
 
 function describeNode(element: SVGGraphicsElement, kind: MotionNodeKind): MotionSceneNode {
-  const role = normalizeRole(element.dataset.animatorRole) || inferRole(humanLabel(element));
   const sourceLabel = element.dataset.animatorLabel || humanLabel(element);
+  const existingRole = normalizeRole(element.dataset.animatorRole);
+  const role = existingRole !== 'unknown' ? existingRole : inferRole(sourceLabel);
   const confidence = clamp(Number.parseFloat(element.dataset.animatorConfidence || '') || (role === 'unknown' ? 0 : 0.7), 0, 1);
   const pivot = normalizePivot(element.dataset.animatorPivot) ?? inferPivot(role, sourceLabel);
   const motionPotential = clamp(Number.parseFloat(element.dataset.animatorMotionPotential || '') || roleMotionPotential(role), 0, 1);
@@ -313,7 +314,7 @@ function findSeparationCandidates(
   shapes: SVGGraphicsElement[],
 ): SeparationCandidate[] {
   const candidates: SeparationCandidate[] = [];
-  const directRootShapes = shapes.filter((shape) => shape.parentElement === svg);
+  const directRootShapes = shapes.filter((shape) => shape.parentNode === svg);
 
   if (directRootShapes.length >= 6) {
     candidates.push({
@@ -396,14 +397,14 @@ function normalizePreparation(value: unknown, allowedIds: Set<string>, warnings:
   });
 
   const separationValue = Array.isArray(record.separationSuggestions) ? record.separationSuggestions : [];
-  const separationSuggestions = separationValue.slice(0, 24).flatMap((value) => {
+  const separationSuggestions: SemanticPreparation['separationSuggestions'] = separationValue.slice(0, 24).flatMap((value) => {
     if (!isRecord(value)) return [];
     const rawTarget = safeString(value.target || value.id);
     const target = rawTarget.startsWith('#') ? rawTarget : rawTarget ? `#${rawTarget}` : '';
     const id = target.replace(/^#/, '');
     if (!target || (id !== 'svg-root' && !allowedIds.has(id))) return [];
     const priorityRaw = safeString(value.priority).toLowerCase();
-    const priority = priorityRaw === 'high' || priorityRaw === 'low' ? priorityRaw : 'medium';
+    const priority: 'low' | 'medium' | 'high' = priorityRaw === 'high' || priorityRaw === 'low' ? priorityRaw : 'medium';
     return [{ target, reason: safeString(value.reason || value.note).slice(0, 280), priority }];
   });
 
