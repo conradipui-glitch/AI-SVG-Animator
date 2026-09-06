@@ -1,9 +1,20 @@
 import './styles.css';
-import { fetchAiModels, requestMotionPlan, type AiModelOption } from './ai';
+import {
+  AiRequestError,
+  fetchAiModels,
+  requestMotionPlan,
+  requestMotionVariants,
+  type AiModelOption,
+} from './ai';
 import { animateMotionSpec, animateSvg, stopAnimation, type MotionOptions, type Preset } from './animator';
 import { buildStandaloneHtml, downloadText } from './export';
 import { resolveLocale, saveLocale, t, type Locale } from './i18n';
-import { parseMotionSpec, type MotionSpec } from './motion-spec';
+import {
+  parseMotionVariants,
+  validateMotionSpecText,
+  type MotionSpec,
+  type MotionVariant,
+} from './motion-spec';
 import { SAMPLE_SVG } from './sample';
 import { normalizeSvg } from './svg';
 
@@ -23,7 +34,12 @@ interface State {
   aiPlan: string;
   aiPlanMeta: string;
   aiBusy: boolean;
+  aiStage: string;
   aiSpec: MotionSpec | null;
+  aiVariants: MotionVariant[];
+  aiSelectedVariant: string;
+  aiWarnings: string[];
+  aiErrorDetail: string;
 }
 
 const state: State = {
@@ -42,7 +58,12 @@ const state: State = {
   aiPlan: '',
   aiPlanMeta: '',
   aiBusy: false,
+  aiStage: '',
   aiSpec: null,
+  aiVariants: [],
+  aiSelectedVariant: '',
+  aiWarnings: [],
+  aiErrorDetail: '',
 };
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -90,7 +111,7 @@ function render(): void {
           <div class="canvas-head">
             <div>
               <div class="panel-kicker">${tr.workspace.section}</div>
-              <div class="canvas-meta"><span class="status-dot"></span><span id="statusText">${state.error || state.status || tr.status.ready}</span></div>
+              <div class="canvas-meta"><span class="status-dot ${state.error ? 'error' : ''}"></span><span id="statusText">${escapeHtml(state.error || state.aiStage || state.status || tr.status.ready)}</span></div>
             </div>
             ${state.cleanSvg ? `<span class="clean-badge">${tr.workspace.cleanBadge}</span>` : ''}
           </div>
@@ -135,10 +156,17 @@ function render(): void {
             <label class="field-label ai-prompt-label" for="aiPrompt">${tr.ai.prompt}</label>
             <textarea id="aiPrompt" class="ai-prompt" spellcheck="true" placeholder="${tr.ai.promptPlaceholder}">${escapeHtml(state.aiPrompt)}</textarea>
             <p class="microcopy">${tr.ai.autoHint}</p>
-            <button class="button ai-button full" id="aiMotionButton" ${state.cleanSvg && !state.aiBusy ? '' : 'disabled'}>
-              ${state.aiBusy ? tr.ai.generating : tr.ai.generate}
-            </button>
-            ${state.aiPlan ? `<div class="ai-plan"><div class="ai-plan-head"><strong>${tr.ai.planTitle}</strong><span>${escapeHtml(state.aiPlanMeta)}</span></div><pre>${escapeHtml(state.aiPlan)}</pre></div>` : ''}
+            <div class="ai-actions">
+              <button class="button ai-button full" id="aiMotionButton" ${state.cleanSvg && !state.aiBusy ? '' : 'disabled'}>
+                ${state.aiBusy && !state.aiVariants.length ? tr.ai.generating : tr.ai.generate}
+              </button>
+              <button class="button ghost full variants-button" id="aiVariantsButton" ${state.cleanSvg && !state.aiBusy ? '' : 'disabled'}>
+                ${state.aiBusy && state.aiStage === tr.ai.generatingVariants ? tr.ai.generatingVariants : tr.ai.suggestVariants}
+              </button>
+            </div>
+            ${state.aiBusy && state.aiStage ? `<div class="ai-progress"><span></span><strong>${escapeHtml(state.aiStage)}</strong></div>` : ''}
+            ${variantGallery()}
+            ${technicalDetails()}
           </div>
         </aside>
       </section>
@@ -157,7 +185,8 @@ function aiModelOptions(emptyLabel: string): string {
 
   return candidates.map((model) => {
     const selected = state.aiModel === model.id ? 'selected' : '';
-    return `<option value="${escapeHtml(model.id)}" ${selected}>${escapeHtml(model.label)}</option>`;
+    const visionMark = model.capabilities.includes('vision') ? ' · vision' : ' · text';
+    return `<option value="${escapeHtml(model.id)}" ${selected}>${escapeHtml(model.label + visionMark)}</option>`;
   }).join('');
 }
 
@@ -170,6 +199,43 @@ function presetCard(preset: Preset, title: string, description: string): string 
 
 function rangeControl(id: string, label: string, value: number, min: number, max: number, step: number, display: string): string {
   return `<label class="range-row" for="${id}Control"><span><strong>${label}</strong><output id="${id}Value">${display}</output></span><input id="${id}Control" type="range" min="${min}" max="${max}" step="${step}" value="${value}" /></label>`;
+}
+
+function variantGallery(): string {
+  if (!state.aiVariants.length) return '';
+  const tr = t(state.locale);
+  return `<section class="variant-gallery">
+    <div class="variant-gallery-title">${tr.ai.variantsTitle}</div>
+    <div class="variant-list">
+      ${state.aiVariants.map((variant) => {
+        const active = state.aiSelectedVariant === variant.id;
+        const warning = variant.validation.rejectedTracks > 0
+          ? ` · ${variant.validation.acceptedTracks}/${variant.validation.receivedTracks}`
+          : '';
+        return `<article class="variant-card ${active ? 'active' : ''}">
+          <div class="variant-card-head"><strong>${escapeHtml(variant.title)}</strong><span>${variant.spec.tracks.length} tracks${warning}</span></div>
+          <p>${escapeHtml(variant.description)}</p>
+          <button class="button ${active ? 'primary' : 'ghost'} variant-apply" data-variant-id="${escapeHtml(variant.id)}">${active ? tr.ai.activeVariant : tr.ai.applyVariant}</button>
+        </article>`;
+      }).join('')}
+    </div>
+  </section>`;
+}
+
+function technicalDetails(): string {
+  if (!state.aiPlan && !state.aiWarnings.length && !state.aiErrorDetail) return '';
+  const tr = t(state.locale);
+  const warnings = state.aiWarnings.length
+    ? `<ul class="ai-warnings">${state.aiWarnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>`
+    : '';
+  const error = state.aiErrorDetail ? `<pre class="ai-error-detail">${escapeHtml(state.aiErrorDetail)}</pre>` : '';
+  const raw = state.aiPlan ? `<div class="ai-plan-head"><strong>${tr.ai.rawResponse}</strong><span>${escapeHtml(state.aiPlanMeta)}</span></div><pre>${escapeHtml(state.aiPlan)}</pre>` : '';
+  return `<details class="ai-debug">
+    <summary>${tr.ai.technicalDetails}</summary>
+    ${warnings}
+    ${error}
+    ${raw}
+  </details>`;
 }
 
 function bindEvents(): void {
@@ -227,6 +293,7 @@ function bindEvents(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((button) => {
     button.addEventListener('click', () => {
       state.aiSpec = null;
+      state.aiSelectedVariant = '';
       state.preset = button.dataset.preset as Preset;
       render();
       if (state.cleanSvg) requestAnimationFrame(playAnimation);
@@ -260,6 +327,14 @@ function bindEvents(): void {
   document.querySelector<HTMLButtonElement>('#aiMotionButton')?.addEventListener('click', () => {
     void generateMotionPlan();
   });
+
+  document.querySelector<HTMLButtonElement>('#aiVariantsButton')?.addEventListener('click', () => {
+    void generateVariants();
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-variant-id]').forEach((button) => {
+    button.addEventListener('click', () => applyVariant(button.dataset.variantId || ''));
+  });
 }
 
 function applySvg(): void {
@@ -273,9 +348,7 @@ function applySvg(): void {
 
   state.status = tr.status.cleaning;
   state.error = '';
-  state.aiPlan = '';
-  state.aiPlanMeta = '';
-  state.aiSpec = null;
+  resetAiResult();
   try {
     const normalized = normalizeSvg(state.rawSvg);
     state.cleanSvg = normalized.markup;
@@ -298,26 +371,131 @@ async function generateMotionPlan(): Promise<void> {
     return;
   }
 
+  resetAiResult();
   state.aiBusy = true;
+  state.aiStage = tr.status.aiPreparing;
   state.error = '';
-  state.aiPlan = '';
-  state.aiPlanMeta = '';
-  state.aiSpec = null;
   render();
+  await nextFrame();
 
   try {
+    state.aiStage = tr.status.aiRequesting;
+    updateStatus();
     const result = await requestMotionPlan(state.cleanSvg, state.aiPrompt, state.aiModel || undefined);
     state.aiPlan = formatPlanText(result.text);
-    state.aiPlanMeta = `${result.model} · ${result.latencyMs}ms${result.fallbackUsed ? ` · ${tr.ai.fallback}` : ''}`;
-    state.aiSpec = parseMotionSpec(result.text, state.cleanSvg);
-    state.status = tr.status.aiReady;
-  } catch {
-    state.error = tr.errors.aiUnavailable;
+    state.aiPlanMeta = `${result.provider} · ${result.model} · ${result.latencyMs}ms${result.fallbackUsed ? ` · ${tr.ai.fallback}` : ''}`;
+    state.aiStage = tr.status.aiValidating;
+    updateStatus();
+
+    const validation = validateMotionSpecText(result.text, state.cleanSvg);
+    state.aiWarnings = validation.warnings;
+    if (!validation.spec) {
+      state.error = tr.errors.aiInvalidSpec;
+      return;
+    }
+
+    state.aiSpec = validation.spec;
+    state.aiStage = tr.status.aiApplying;
+    state.status = validation.rejectedTracks > 0
+      ? `${tr.status.aiReady} · ${tr.ai.partial} (${validation.acceptedTracks}/${validation.receivedTracks})`
+      : tr.status.aiReady;
+  } catch (error) {
+    setAiError(error, tr.errors.aiUnavailable);
   } finally {
     state.aiBusy = false;
+    state.aiStage = '';
     render();
-    if (state.aiSpec) requestAnimationFrame(playAnimation);
+    if (state.aiSpec) {
+      requestAnimationFrame(() => {
+        playAnimation();
+        state.status = t(state.locale).status.aiReady;
+        updateStatus();
+      });
+    }
   }
+}
+
+async function generateVariants(): Promise<void> {
+  const tr = t(state.locale);
+  if (!state.cleanSvg) {
+    state.error = tr.errors.aiNeedsSvg;
+    updateStatus();
+    return;
+  }
+
+  resetAiResult();
+  state.aiBusy = true;
+  state.aiStage = tr.ai.generatingVariants;
+  state.error = '';
+  render();
+  await nextFrame();
+
+  try {
+    const result = await requestMotionVariants(state.cleanSvg, state.aiModel || undefined);
+    state.aiPlan = formatPlanText(result.text);
+    state.aiPlanMeta = `${result.provider} · ${result.model} · ${result.latencyMs}ms${result.fallbackUsed ? ` · ${tr.ai.fallback}` : ''}`;
+    const variants = parseMotionVariants(result.text, state.cleanSvg);
+    if (!variants.length) {
+      state.error = tr.errors.aiNoVariants;
+      return;
+    }
+
+    state.aiVariants = variants;
+    state.aiWarnings = variants.flatMap((variant) => variant.validation.warnings.map((warning) => `${variant.title}: ${warning}`));
+    state.status = tr.status.variantsReady;
+  } catch (error) {
+    setAiError(error, tr.errors.aiUnavailable);
+  } finally {
+    state.aiBusy = false;
+    state.aiStage = '';
+    render();
+  }
+}
+
+function applyVariant(id: string): void {
+  const variant = state.aiVariants.find((candidate) => candidate.id === id);
+  if (!variant) return;
+  state.aiSpec = variant.spec;
+  state.aiSelectedVariant = variant.id;
+  state.aiWarnings = variant.validation.warnings;
+  state.error = '';
+  state.status = t(state.locale).status.aiApplying;
+  render();
+  requestAnimationFrame(() => {
+    playAnimation();
+    state.status = `${t(state.locale).status.aiReady} · ${variant.title}`;
+    updateStatus();
+  });
+}
+
+function setAiError(error: unknown, fallback: string): void {
+  state.error = fallback;
+  if (error instanceof AiRequestError) {
+    const attempts = error.attempts.map((attempt) => {
+      const status = attempt.status ? ` HTTP ${attempt.status}` : '';
+      return `${attempt.provider}/${attempt.model}${status}: ${attempt.message}`;
+    });
+    state.aiErrorDetail = [
+      `${error.code} · HTTP ${error.status}`,
+      error.message,
+      ...attempts,
+    ].filter(Boolean).join('\n');
+  } else if (error instanceof Error) {
+    state.aiErrorDetail = error.message;
+  } else {
+    state.aiErrorDetail = 'Unknown AI error';
+  }
+}
+
+function resetAiResult(): void {
+  state.aiPlan = '';
+  state.aiPlanMeta = '';
+  state.aiStage = '';
+  state.aiSpec = null;
+  state.aiVariants = [];
+  state.aiSelectedVariant = '';
+  state.aiWarnings = [];
+  state.aiErrorDetail = '';
 }
 
 function formatPlanText(value: string): string {
@@ -347,16 +525,13 @@ function playAnimation(): void {
   if (!svg) return;
   state.status = t(state.locale).status.animating;
   updateStatus();
-  if (state.aiSpec) {
-    animateMotionSpec(svg, state.aiSpec);
-  } else {
-    animateSvg(svg, motionOptions());
-  }
+  if (state.aiSpec) animateMotionSpec(svg, state.aiSpec);
+  else animateSvg(svg, motionOptions());
 }
 
 function updateStatus(): void {
   const status = document.querySelector<HTMLElement>('#statusText');
-  if (status) status.textContent = state.error || state.status || t(state.locale).status.ready;
+  if (status) status.textContent = state.error || state.aiStage || state.status || t(state.locale).status.ready;
 }
 
 function escapeHtml(value: string): string {
@@ -367,16 +542,21 @@ function escapeHtml(value: string): string {
     .replaceAll('"', '&quot;');
 }
 
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 async function loadAiModels(): Promise<void> {
   try {
     const response = await fetchAiModels();
     state.aiModels = response.selectable;
     const eligible = state.aiModels.find((model) => model.id === response.defaults.reason && model.availableForCredential !== false)
+      ?? state.aiModels.find((model) => model.capabilities.includes('vision') && model.availableForCredential !== false)
       ?? state.aiModels.find((model) => model.capabilities.includes('text') && model.availableForCredential !== false);
     if (eligible) state.aiModel = eligible.id;
     render();
   } catch {
-    // The app remains usable as a static animator even if the AI backend is not configured yet.
+    // Static animation remains available if model discovery is temporarily unavailable.
   }
 }
 
