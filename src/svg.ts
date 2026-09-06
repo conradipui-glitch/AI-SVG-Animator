@@ -1,10 +1,11 @@
 import DOMPurify from 'dompurify';
 
-const GRAPHIC_SELECTOR = 'path, circle, ellipse, rect, line, polyline, polygon';
+const GRAPHIC_SELECTOR = 'path, circle, ellipse, rect, line, polyline, polygon, text';
 
 export interface NormalizedSvg {
   markup: string;
   elementCount: number;
+  groupCount: number;
 }
 
 export function normalizeSvg(raw: string): NormalizedSvg {
@@ -42,18 +43,31 @@ export function normalizeSvg(raw: string): NormalizedSvg {
     }
   }
 
+  const groups = Array.from(svg.querySelectorAll<SVGGElement>('g'));
+  groups.forEach((group, index) => {
+    if (!group.id) group.id = `animator-group-${index + 1}`;
+    group.dataset.animatorGroup = 'true';
+    group.dataset.animatorMotionTarget = 'true';
+  });
+
   const elements = Array.from(svg.querySelectorAll<SVGGraphicsElement>(GRAPHIC_SELECTOR));
   elements.forEach((element, index) => {
     if (!element.id) element.id = `animator-node-${index + 1}`;
     element.dataset.animatorTarget = 'true';
+    element.dataset.animatorMotionTarget = 'true';
   });
 
   return {
     markup: new XMLSerializer().serializeToString(svg),
-    elementCount: elements.length
+    elementCount: elements.length,
+    groupCount: groups.length,
   };
 }
 
 export function getAnimatableElements(svg: SVGSVGElement): SVGGraphicsElement[] {
   return Array.from(svg.querySelectorAll<SVGGraphicsElement>('[data-animator-target="true"]'));
+}
+
+export function getMotionTargetElements(svg: SVGSVGElement): SVGGraphicsElement[] {
+  return Array.from(svg.querySelectorAll<SVGGraphicsElement>('[data-animator-motion-target="true"]'));
 }
