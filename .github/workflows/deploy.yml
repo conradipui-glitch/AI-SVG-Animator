@@ -63,18 +63,32 @@ jobs:
         run: |
           set -u
           APP_URL="https://ai-svg-animator.conradipui.workers.dev"
+
           echo "Health:"
-          curl --retry 4 --retry-delay 2 --fail-with-body --show-error --silent "$APP_URL/api/ai/health" || true
+          curl --retry 4 --retry-delay 2 --fail-with-body --show-error --silent "$APP_URL/api/ai/health" | tee /tmp/health.json
           echo
+          node -e "const j=require('/tmp/health.json'); if(!j.ok || !j.baiConfigured) process.exit(1); console.log('B.AI health OK; visible free models:', j.knownFreeModelsVisible.join(', '))"
+
           echo "Motion route:"
-          status=$(curl --retry 3 --retry-delay 2 --show-error --silent \
+          motion_status=$(curl --retry 3 --retry-delay 2 --show-error --silent \
             -o /tmp/motion-smoke.json -w '%{http_code}' \
             -X POST "$APP_URL/api/ai/motion" \
             -H 'content-type: application/json' \
-            --data '{"model":"glm-5.3-flash","prompt":"Return a Motion Spec v1 JSON object only. Allowed target: #demo. Create one subtle translate track for #demo."}')
+            --data '{"model":"glm-5.3-flash","prompt":"Allowed target IDs: #demo. Return Motion Spec v1 JSON only. Create one subtle translate track for #demo."}')
           cat /tmp/motion-smoke.json
           echo
-          echo "HTTP $status"
-          if [ "$status" != "200" ]; then
-            exit 1
-          fi
+          echo "Motion HTTP $motion_status"
+          if [ "$motion_status" != "200" ]; then exit 1; fi
+          node -e "const j=require('/tmp/motion-smoke.json'); const s=JSON.parse(j.text); if(s.version!==1 || !Array.isArray(s.tracks) || !s.tracks.length) process.exit(1); console.log('Motion spec OK via',j.provider,j.model)"
+
+          echo "Variants route:"
+          variants_status=$(curl --retry 3 --retry-delay 2 --show-error --silent \
+            -o /tmp/variants-smoke.json -w '%{http_code}' \
+            -X POST "$APP_URL/api/ai/variants" \
+            -H 'content-type: application/json' \
+            --data '{"model":"glm-5.3-flash","prompt":"Allowed target IDs: #demo, #accent. Return exactly three animation variants named subtle, natural and expressive. Each motionSpec must use only #demo or #accent and contain at least one valid track."}')
+          cat /tmp/variants-smoke.json
+          echo
+          echo "Variants HTTP $variants_status"
+          if [ "$variants_status" != "200" ]; then exit 1; fi
+          node -e "const j=require('/tmp/variants-smoke.json'); const v=JSON.parse(j.text); if(!Array.isArray(v.variants) || v.variants.length<3) process.exit(1); for(const x of v.variants.slice(0,3)){if(!x.motionSpec || !Array.isArray(x.motionSpec.tracks) || !x.motionSpec.tracks.length) process.exit(1)} console.log('Three AI variants OK via',j.provider,j.model)"
