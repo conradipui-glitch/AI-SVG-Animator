@@ -13,8 +13,8 @@
     "binding": "AI"
   },
   "vars": {
-    "TOKENROUTER_BASE_URL": "https://api.tokenrouter.com/v1",
-    "TOKENROUTER_TEXT_MODEL": "z-ai/glm-5.3-free",
-    "TOKENROUTER_VISION_MODEL": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    "BAI_BASE_URL": "https://api.b.ai/v1",
+    "BAI_REASON_MODEL": "glm-5.3-flash",
+    "BAI_VISION_MODEL": "glm-5.3-flash"
   }
 }
