@@ -45,8 +45,24 @@ export const en = {
     intensity: 'Intensity',
     loop: 'Loop'
   },
+  readiness: {
+    section: '05 · MOTION-READY MAP',
+    score: 'Ready score',
+    groups: 'Groups',
+    semantic: 'Semantic nodes',
+    splitCandidates: 'Needs splitting',
+    analyze: 'Analyze parts with AI',
+    analyzing: 'Analyzing parts…',
+    enriched: 'AI-enriched map',
+    detected: 'Detected parts',
+    separationTitle: 'Needs separation',
+    noSeparation: 'No obvious structural split is required.',
+    low: 'Low',
+    medium: 'Medium',
+    high: 'High'
+  },
   ai: {
-    section: '05 · AI MOTION DIRECTOR',
+    section: '06 · AI MOTION DIRECTOR',
     model: 'Free model',
     prompt: 'Describe the animation',
     promptPlaceholder: 'e.g. Make the main character breathe subtly, blink, and let the secondary shapes drift very gently…',
@@ -70,6 +86,8 @@ export const en = {
     ready: 'Ready',
     exported: 'HTML exported',
     loaded: 'SVG loaded',
+    motionPreparing: 'AI is mapping objects, joints and pivots…',
+    motionPrepared: 'Motion-ready semantic map applied',
     aiPreparing: 'Preparing SVG and visual render…',
     aiRequesting: 'AI is analyzing the scene and planning motion…',
     aiValidating: 'Validating Motion Spec…',
@@ -84,7 +102,8 @@ export const en = {
     aiUnavailable: 'AI animation is currently unavailable.',
     aiNeedsSvg: 'Apply an SVG before running AI animation.',
     aiInvalidSpec: 'The model responded, but no executable animation could be produced.',
-    aiNoVariants: 'The model did not return any usable animation variants.'
+    aiNoVariants: 'The model did not return any usable animation variants.',
+    motionPreparationEmpty: 'AI responded, but no existing SVG nodes could be enriched.'
   },
-  footer: { note: 'Static Animator + AI Motion Director' }
+  footer: { note: 'Motion-Ready SVG + AI Motion Director' }
 } satisfies TranslationSchema;
