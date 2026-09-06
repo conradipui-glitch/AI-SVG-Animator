@@ -43,9 +43,16 @@ export interface TranslationSchema {
     autoHint: string;
     generate: string;
     generating: string;
-    planTitle: string;
+    suggestVariants: string;
+    generatingVariants: string;
+    variantsTitle: string;
+    applyVariant: string;
+    activeVariant: string;
+    technicalDetails: string;
+    rawResponse: string;
     noModels: string;
     fallback: string;
+    partial: string;
   };
   status: {
     cleaning: string;
@@ -53,7 +60,12 @@ export interface TranslationSchema {
     ready: string;
     exported: string;
     loaded: string;
+    aiPreparing: string;
+    aiRequesting: string;
+    aiValidating: string;
+    aiApplying: string;
     aiReady: string;
+    variantsReady: string;
   };
   errors: {
     invalidSvg: string;
@@ -61,6 +73,8 @@ export interface TranslationSchema {
     readFile: string;
     aiUnavailable: string;
     aiNeedsSvg: string;
+    aiInvalidSpec: string;
+    aiNoVariants: string;
   };
   footer: { note: string };
 }
