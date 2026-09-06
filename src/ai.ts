@@ -27,6 +27,10 @@ export interface AiRouteResult {
   latencyMs: number;
 }
 
+export interface MotionRequestOptions {
+  includeImage?: boolean;
+}
+
 interface AiErrorPayload {
   error?: string;
   message?: string;
@@ -66,8 +70,9 @@ export async function requestMotionPlan(
   svgMarkup: string,
   animationPrompt: string,
   model?: string,
+  options: MotionRequestOptions = {},
 ): Promise<AiRouteResult> {
-  const image = await renderSvgToPngDataUrl(svgMarkup);
+  const image = options.includeImage === false ? undefined : await renderSvgToPngDataUrl(svgMarkup);
   return postAiRoute('/api/ai/motion', {
     ...(model ? { model } : {}),
     ...(image ? { image } : {}),
@@ -77,13 +82,15 @@ export async function requestMotionPlan(
 
 export async function requestMotionVariants(
   svgMarkup: string,
+  animationPrompt: string,
   model?: string,
+  options: MotionRequestOptions = {},
 ): Promise<AiRouteResult> {
-  const image = await renderSvgToPngDataUrl(svgMarkup);
+  const image = options.includeImage === false ? undefined : await renderSvgToPngDataUrl(svgMarkup);
   return postAiRoute('/api/ai/variants', {
     ...(model ? { model } : {}),
     ...(image ? { image } : {}),
-    prompt: buildVariantsPrompt(svgMarkup),
+    prompt: buildVariantsPrompt(svgMarkup, animationPrompt),
   });
 }
 
@@ -139,22 +146,25 @@ function buildMotionPrompt(svgMarkup: string, animationPrompt: string): string {
     `Motion targets (${context.nodes.length} listed): ${JSON.stringify(context.nodes)}`,
     'Use only target IDs present in the motion-target list. Groups are valid targets for whole-object motion; leaf shapes are valid targets for part-level motion. Avoid conflicting transforms on a group and its child unless that hierarchy is deliberate.',
     'Respect pivot hints for articulated rotation. Prefer semantic groups over many individual paths when moving one logical object.',
+    'For an explicitly energetic or acrobatic request, make the result visibly readable rather than reducing it to barely perceptible idle motion.',
     'The cleaned SVG markup follows. Use it to understand grouping, geometry, order and relationships. Do not rewrite the SVG in your response.',
     context.markup,
   ].join('\n\n');
 }
 
-function buildVariantsPrompt(svgMarkup: string): string {
+function buildVariantsPrompt(svgMarkup: string, animationPrompt: string): string {
   const context = svgContext(svgMarkup);
   const map = compactSceneMap(analyzeMotionReadySvg(svgMarkup), 100);
+  const intent = animationPrompt.trim() || 'Choose tasteful automatic motion for the key visual elements.';
   return [
-    'Generate exactly three animation directions for this artwork: subtle, natural and expressive.',
+    `User animation intent: ${intent}`,
+    'Generate exactly three animation directions for THIS user intent: subtle, natural and expressive.',
     'The rendered artwork is attached as an image when available. Inspect the picture first, then map semantic objects to the exact SVG IDs below.',
     `Motion-ready scene map: ${JSON.stringify(map)}`,
     `SVG viewBox: ${context.viewBox}`,
     `Motion targets (${context.nodes.length} listed): ${JSON.stringify(context.nodes)}`,
     'Use only IDs from the motion-target list. Groups may be animated as logical objects. Respect semantic pivot hints and avoid double-transforming a group plus its children unless intentional.',
-    'Keep the variants genuinely different while preserving the meaning and readability of the artwork.',
+    'Keep all three variants faithful to the requested action. Vary amplitude, timing, secondary motion and choreography rather than changing the requested action itself.',
     'The cleaned SVG markup follows for structural context. Do not rewrite the SVG in your response.',
     context.markup,
   ].join('\n\n');
@@ -203,7 +213,7 @@ async function renderSvgToPngDataUrl(svgMarkup: string): Promise<string | undefi
   const viewBox = parseViewBox(svg.getAttribute('viewBox'));
   const sourceWidth = viewBox?.width || Number.parseFloat(svg.getAttribute('width') || '0') || 512;
   const sourceHeight = viewBox?.height || Number.parseFloat(svg.getAttribute('height') || '0') || 512;
-  const maxSide = 768;
+  const maxSide = 512;
   const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
   const width = Math.max(1, Math.round(sourceWidth * scale));
   const height = Math.max(1, Math.round(sourceHeight * scale));
