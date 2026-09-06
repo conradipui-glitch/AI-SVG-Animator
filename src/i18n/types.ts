@@ -69,6 +69,13 @@ export interface TranslationSchema {
     noModels: string;
     fallback: string;
     partial: string;
+    waitHint: string;
+    resultTitle: string;
+    motionPlaying: string;
+    variantsPlaying: string;
+    resultHint: string;
+    semanticReady: string;
+    semanticReadyHint: string;
   };
   status: {
     cleaning: string;
