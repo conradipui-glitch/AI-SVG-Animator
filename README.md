@@ -6,30 +6,39 @@
 
 <h1 align="center">AI SVG Animator</h1>
 <p align="center"><strong>Turn ideas into living vectors.</strong></p>
-<p align="center">SVG → Motion → Web · Prompt → SVG coming next</p>
+<p align="center">SVG → Motion → Web · AI Motion Director now wired · Prompt → SVG next</p>
 
 <p align="center">
   <a href="./docs/PRODUCT_PLAN.md">Product Plan</a> ·
+  <a href="./docs/MOTION_SPEC.md">Motion Spec</a> ·
+  <a href="./docs/MODEL_ROUTING.md">Model Routing</a> ·
+  <a href="./docs/DEPLOY.md">Deploy</a> ·
   <a href="./docs/LOCALIZATION.md">Localization</a>
 </p>
 
 ## Current build
 
-**Milestone 1 — Static Animator is implemented.**
+**Static Animator is implemented, and the first AI Motion Director path is now wired end-to-end.**
 
-The app can now take an existing SVG and turn it into a controllable web animation:
+The app can:
 
 - paste or upload an SVG;
 - sanitize unsafe SVG markup with DOMPurify;
-- normalize sizing / `viewBox` and tag animatable geometry;
+- normalize sizing / `viewBox` and assign stable animation targets;
 - preview it on a live canvas;
-- apply **Reveal**, **Draw**, or **Float**;
+- apply **Reveal**, **Draw**, or **Float** presets;
 - tune duration, intensity, and looping;
-- switch the full UI between **English / Russian** without losing the current work;
+- switch the full UI between **English / Russian** without losing work;
+- choose a currently available free B.AI model;
+- describe an animation in natural language or leave the prompt empty for automatic motion;
+- send a compact SVG node map to the AI Motion Planner;
+- validate returned **Motion Spec v1** against real SVG target IDs;
+- automatically execute a valid AI motion plan through GSAP;
+- fall back safely to deterministic presets when AI output is invalid or unavailable;
 - download the normalized SVG;
-- export a **self-contained HTML file** with no runtime CDN dependency.
+- export a self-contained preset-based HTML file.
 
-The next milestone connects **RouterAI / Recraft Vector**, so a user can start from a text prompt instead of bringing an SVG.
+The next major product milestone connects **RouterAI / Recraft Vector**, so a user can start from a text prompt instead of bringing an SVG.
 
 ## How it works
 
@@ -46,14 +55,24 @@ DOMPurify sanitizer
    ▼
 SVG normalizer + stable animation targets
    │
-   ▼
-GSAP preview engine
-   ├── Reveal
-   ├── Draw
-   └── Float
-   │
-   ▼
-Live preview + SVG / standalone HTML export
+   ├──────── deterministic presets ────────┐
+   │                                        │
+   ▼                                        │
+compact node map                            │
+   │                                        │
+   ▼                                        │
+B.AI / Cloudflare AI fallback               │
+   │                                        │
+   ▼                                        │
+Motion Spec v1                              │
+   │                                        │
+   ▼                                        │
+allowlist + clamps + target validation      │
+   │                                        │
+   └──────────────► GSAP renderer ◄─────────┘
+                         │
+                         ▼
+                    Live preview
 ```
 
 ## Why this project exists
@@ -63,6 +82,19 @@ Animated SVG assets sit in an awkward gap. AI image tools usually stop at raster
 AI SVG Animator is aiming for a simpler path:
 
 > **Describe or bring a vector → make it move → ship it to the web.**
+
+## AI model routing
+
+During MVP development the Worker prefers currently free B.AI routes and keeps Cloudflare Workers AI as reserve.
+
+Current selectable B.AI candidates:
+
+- `glm-5.3-flash` — text + vision;
+- `qwen3.8-flash` — text + vision;
+- `mimo-v2.5` — text + vision;
+- `hy3` — text only.
+
+The browser never receives provider keys. See [`docs/MODEL_ROUTING.md`](./docs/MODEL_ROUTING.md).
 
 ## Run locally
 
@@ -75,36 +107,53 @@ npm install
 npm run dev
 ```
 
-Production build:
+Worker development:
+
+```bash
+cp .dev.vars.example .dev.vars
+npm run dev:worker
+```
+
+Production checks:
 
 ```bash
 npm run build
-npm run preview
+npm run check:worker
 ```
+
+Deployment details: [`docs/DEPLOY.md`](./docs/DEPLOY.md).
 
 ## Stack
 
 - **Vite 8** — frontend build / dev server
 - **TypeScript 7** — typed application layer
-- **GSAP 3.15** — live SVG animation runtime
+- **GSAP 3.15** — SVG animation runtime
 - **DOMPurify 3.4** — SVG sanitization before inline rendering
-- browser **Web Animations API** — dependency-free exported HTML animation
+- **Cloudflare Workers** — API boundary + static deployment
+- **Cloudflare Workers AI** — reserve AI route
+- **B.AI OpenAI-compatible API** — free-model pool during MVP development
+- browser **Web Animations API** — dependency-free exported preset HTML
 
 ## Project structure
 
 ```text
 src/
-├── animator.ts       # Reveal / Draw / Float GSAP presets
+├── ai.ts             # frontend AI API client + compact node-map prompt
+├── animator.ts       # presets + Motion Spec GSAP executor
 ├── export.ts         # standalone HTML + file downloads
 ├── main.ts           # app state, UI and interactions
+├── motion-spec.ts    # Motion Spec v1 parser / validator
 ├── sample.ts         # built-in demo vector
 ├── styles.css        # Vector Laboratory × Motion Studio UI
 ├── svg.ts            # sanitization + normalization
 └── i18n/
-    ├── index.ts      # locale resolution + persistence
+    ├── index.ts
     ├── en.ts
     ├── ru.ts
     └── types.ts
+
+worker/
+└── index.ts           # B.AI routes + Cloudflare fallback
 ```
 
 ## Design direction
@@ -143,23 +192,33 @@ See [`docs/LOCALIZATION.md`](./docs/LOCALIZATION.md).
 - live preview;
 - duration / intensity / loop controls;
 - normalized SVG export;
-- standalone HTML export.
+- standalone preset HTML export.
+
+### 🟡 AI Motion foundation — implemented
+- B.AI model routing;
+- Cloudflare fallback chain;
+- natural-language motion prompt;
+- compact SVG node map;
+- Motion Spec v1;
+- target/effect validation;
+- automatic GSAP execution of a valid AI plan.
 
 ### ▶ Milestone 2 — AI SVG generation
 - RouterAI / Recraft Vector adapter;
 - prompt → SVG;
 - prompt → SVG → animation end-to-end;
 - provider error / rate handling;
-- Cloudflare Worker boundary for secrets.
+- public Cloudflare deployment.
 
-### Milestone 3 — AI motion
-- semantic SVG analyzer;
-- Motion Spec JSON;
-- AI motion planner;
-- editable motion variations.
+### Milestone 3+ — Semantic scene motion
+- vision scene understanding;
+- semantic SVG groups;
+- automatic key-object selection;
+- image / scene decomposition;
+- layered and hybrid scene animation;
+- motion variations.
 
-### Milestone 4 — public MVP polish
-- deployment;
+### Public MVP polish
 - responsive QA;
 - real demo asset / animated README example;
 - smoke tests;
@@ -168,6 +227,9 @@ See [`docs/LOCALIZATION.md`](./docs/LOCALIZATION.md).
 ## Docs
 
 - [`docs/PRODUCT_PLAN.md`](./docs/PRODUCT_PLAN.md) — product thesis, architecture and milestones.
+- [`docs/MOTION_SPEC.md`](./docs/MOTION_SPEC.md) — controlled AI-to-renderer motion contract.
+- [`docs/MODEL_ROUTING.md`](./docs/MODEL_ROUTING.md) — B.AI + Cloudflare routing policy.
+- [`docs/DEPLOY.md`](./docs/DEPLOY.md) — secure Cloudflare deployment.
 - [`docs/LOCALIZATION.md`](./docs/LOCALIZATION.md) — RU / EN strategy.
 
 ## Vision
