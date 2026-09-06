@@ -45,17 +45,32 @@ export const en = {
     intensity: 'Intensity',
     loop: 'Loop'
   },
+  ai: {
+    section: '05 · AI MOTION DIRECTOR',
+    model: 'Free model',
+    prompt: 'Describe the animation',
+    promptPlaceholder: 'e.g. Make the main character breathe subtly, blink, and let the secondary shapes drift very gently…',
+    autoHint: 'Leave the prompt empty for automatic motion. The AI is instructed to animate only key elements by default.',
+    generate: 'Generate Motion Plan',
+    generating: 'Planning motion…',
+    planTitle: 'Motion Plan',
+    noModels: 'Free-model list is unavailable; the backend will use its default route.',
+    fallback: 'fallback used'
+  },
   status: {
     cleaning: 'Cleaning SVG…',
     animating: 'Animating…',
     ready: 'Ready',
     exported: 'HTML exported',
-    loaded: 'SVG loaded'
+    loaded: 'SVG loaded',
+    aiReady: 'AI motion plan ready'
   },
   errors: {
     invalidSvg: 'The input is not a valid SVG.',
     emptySvg: 'Paste or upload an SVG first.',
-    readFile: 'Could not read this SVG file.'
+    readFile: 'Could not read this SVG file.',
+    aiUnavailable: 'AI motion planning is temporarily unavailable.',
+    aiNeedsSvg: 'Apply an SVG before asking AI for a motion plan.'
   },
-  footer: { note: 'Static Animator · Milestone 1' }
+  footer: { note: 'Static Animator + AI Motion routing' }
 } satisfies TranslationSchema;
