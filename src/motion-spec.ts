@@ -244,7 +244,7 @@ function applyEffectDefaults(effect: MotionEffect, from: MotionValues, to: Motio
 function targetIds(svgMarkup: string): Set<string> {
   const doc = new DOMParser().parseFromString(svgMarkup, 'image/svg+xml');
   return new Set(
-    Array.from(doc.querySelectorAll<SVGGraphicsElement>('[data-animator-target="true"]'))
+    Array.from(doc.querySelectorAll<SVGGraphicsElement>('[data-animator-motion-target="true"]'))
       .map((element) => element.id)
       .filter(Boolean),
   );
