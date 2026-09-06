@@ -1,6 +1,10 @@
 import type { MotionOptions } from './animator';
 import type { MotionSpec } from './motion-spec';
 
+type MotionGlobal = typeof globalThis & {
+  __AI_SVG_ACTIVE_MOTION_SPEC__?: MotionSpec | null;
+};
+
 function escapeScript(value: string): string {
   return value.replaceAll('</script>', '<\\/script>');
 }
@@ -10,8 +14,9 @@ export function buildStandaloneHtml(
   options: MotionOptions,
   motionSpec: MotionSpec | null = null,
 ): string {
+  const activeMotionSpec = motionSpec ?? (globalThis as MotionGlobal).__AI_SVG_ACTIVE_MOTION_SPEC__ ?? null;
   const optionsPayload = escapeScript(JSON.stringify(options));
-  const specPayload = escapeScript(JSON.stringify(motionSpec));
+  const specPayload = escapeScript(JSON.stringify(activeMotionSpec));
   return `<!doctype html>
 <html lang="en">
 <head>
