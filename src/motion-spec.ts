@@ -41,6 +41,15 @@ export interface MotionVariant {
   validation: MotionSpecValidation;
 }
 
+interface TargetInfo {
+  id: string;
+  role: string;
+  isGroup: boolean;
+  graphicsCount: number;
+}
+
+type FallbackStyle = 'subtle' | 'natural' | 'expressive';
+
 const EFFECTS = new Set<MotionEffect>(['translate', 'rotate', 'scale', 'opacity', 'pulse', 'draw']);
 const SAFE_EASES = new Set([
   'none',
@@ -67,47 +76,60 @@ export function validateMotionSpecText(text: string, svgMarkup: string): MotionS
 }
 
 export function validateMotionSpecValue(value: unknown, svgMarkup: string): MotionSpecValidation {
+  const catalog = targetCatalog(svgMarkup);
+  const fallback = buildFallbackMotionSpec(catalog, 'natural');
   const parsed = unwrapMotionSpec(value);
   if (!parsed) {
     return {
-      spec: null,
+      spec: fallback,
       receivedTracks: 0,
-      acceptedTracks: 0,
+      acceptedTracks: fallback.tracks.length,
       rejectedTracks: 0,
-      warnings: ['AI response did not contain a Motion Spec object.'],
+      warnings: ['AI response did not contain a Motion Spec object. A safe local fallback was generated.'],
     };
   }
 
   const tracksValue = firstArray(parsed, ['tracks', 'motions', 'animations', 'steps']);
   if (!tracksValue) {
     return {
-      spec: null,
+      spec: fallback,
       receivedTracks: 0,
-      acceptedTracks: 0,
+      acceptedTracks: fallback.tracks.length,
       rejectedTracks: 0,
-      warnings: ['Motion Spec did not contain a tracks array.'],
+      warnings: ['Motion Spec did not contain a tracks array. A safe local fallback was generated.'],
     };
   }
 
-  const allowedTargets = targetIds(svgMarkup);
   const warnings: string[] = [];
   const tracks: MotionTrack[] = [];
 
   tracksValue.slice(0, 24).forEach((trackValue, index) => {
-    const result = normalizeTrack(trackValue, allowedTargets);
-    if (result.track) tracks.push(result.track);
-    else warnings.push(`Track ${index + 1}: ${result.reason || 'rejected'}`);
+    const result = normalizeTrack(trackValue, catalog);
+    if (result.track) {
+      tracks.push(result.track);
+      if (result.warning) warnings.push(`Track ${index + 1}: ${result.warning}`);
+    } else {
+      warnings.push(`Track ${index + 1}: ${result.reason || 'rejected'}`);
+    }
   });
 
   const receivedTracks = Math.min(tracksValue.length, 24);
-  const acceptedTracks = tracks.length;
-  const rejectedTracks = receivedTracks - acceptedTracks;
+  if (!tracks.length) {
+    warnings.push('No AI tracks were executable. A safe local fallback was generated.');
+    return {
+      spec: fallback,
+      receivedTracks,
+      acceptedTracks: fallback.tracks.length,
+      rejectedTracks: receivedTracks,
+      warnings,
+    };
+  }
 
   return {
-    spec: acceptedTracks ? { version: 1, loop: parsed.loop !== false, tracks } : null,
+    spec: { version: 1, loop: parsed.loop !== false, tracks },
     receivedTracks,
-    acceptedTracks,
-    rejectedTracks,
+    acceptedTracks: tracks.length,
+    rejectedTracks: receivedTracks - tracks.length,
     warnings,
   };
 }
@@ -115,29 +137,55 @@ export function validateMotionSpecValue(value: unknown, svgMarkup: string): Moti
 export function parseMotionVariants(text: string, svgMarkup: string): MotionVariant[] {
   const parsed = parseJsonValue(text);
   const items = variantItems(parsed);
-  if (!items.length) return [];
+  const catalog = targetCatalog(svgMarkup);
+  const variants: MotionVariant[] = [];
 
-  return items
-    .slice(0, 6)
-    .map((item, index): MotionVariant | null => {
-      if (!isRecord(item)) return null;
-      const candidate = item.motionSpec
-        ?? item.motion_spec
-        ?? item.spec
-        ?? item.animation
-        ?? item.plan
-        ?? item;
-      const validation = validateMotionSpecValue(candidate, svgMarkup);
-      if (!validation.spec) return null;
-      return {
-        id: safeString(item.id) || safeString(item.key) || `variant-${index + 1}`,
-        title: safeString(item.title) || safeString(item.name) || safeString(item.style) || `Variant ${index + 1}`,
-        description: safeString(item.description) || safeString(item.summary) || safeString(item.note) || '',
-        spec: validation.spec,
-        validation,
-      };
-    })
-    .filter((variant): variant is MotionVariant => Boolean(variant));
+  items.slice(0, 6).forEach((item, index) => {
+    if (!isRecord(item)) return;
+    const candidate = item.motionSpec
+      ?? item.motion_spec
+      ?? item.spec
+      ?? item.animation
+      ?? item.plan
+      ?? item;
+    const validation = validateMotionSpecValue(candidate, svgMarkup);
+    if (!validation.spec) return;
+    variants.push({
+      id: safeString(item.id) || safeString(item.key) || `variant-${index + 1}`,
+      title: safeString(item.title) || safeString(item.name) || safeString(item.style) || `Variant ${index + 1}`,
+      description: safeString(item.description) || safeString(item.summary) || safeString(item.note) || '',
+      spec: validation.spec,
+      validation,
+    });
+  });
+
+  const desired: Array<{ id: FallbackStyle; title: string; description: string }> = [
+    { id: 'subtle', title: 'Subtle', description: 'Safe restrained motion generated locally.' },
+    { id: 'natural', title: 'Natural', description: 'Balanced safe motion generated locally.' },
+    { id: 'expressive', title: 'Expressive', description: 'Stronger safe motion generated locally.' },
+  ];
+
+  for (const preset of desired) {
+    const alreadyPresent = variants.some((variant) =>
+      variant.id.toLowerCase() === preset.id || variant.title.toLowerCase() === preset.title.toLowerCase());
+    if (alreadyPresent) continue;
+    const spec = buildFallbackMotionSpec(catalog, preset.id);
+    variants.push({
+      id: preset.id,
+      title: preset.title,
+      description: preset.description,
+      spec,
+      validation: {
+        spec,
+        receivedTracks: 0,
+        acceptedTracks: spec.tracks.length,
+        rejectedTracks: 0,
+        warnings: ['AI variant was missing or invalid; safe local variant generated.'],
+      },
+    });
+  }
+
+  return variants.slice(0, 3);
 }
 
 function variantItems(value: unknown): unknown[] {
@@ -161,10 +209,12 @@ function variantItems(value: unknown): unknown[] {
 }
 
 function unwrapMotionSpec(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) return { tracks: value };
   if (!isRecord(value)) return null;
   if (firstArray(value, ['tracks', 'motions', 'animations', 'steps'])) return value;
   for (const key of ['motionSpec', 'motion_spec', 'spec', 'animation', 'plan']) {
     const nested = value[key];
+    if (Array.isArray(nested)) return { tracks: nested };
     if (isRecord(nested)) return nested;
   }
   return null;
@@ -172,16 +222,17 @@ function unwrapMotionSpec(value: unknown): Record<string, unknown> | null {
 
 function normalizeTrack(
   value: unknown,
-  allowedTargets: Set<string>,
-): { track: MotionTrack | null; reason?: string } {
+  catalog: TargetInfo[],
+): { track: MotionTrack | null; reason?: string; warning?: string } {
   if (!isRecord(value)) return { track: null, reason: 'not an object' };
 
   const targetValue = value.target ?? value.selector ?? value.id;
   const rawTarget = typeof targetValue === 'string' ? targetValue.trim() : '';
-  const target = rawTarget.startsWith('#') ? rawTarget : rawTarget ? `#${rawTarget}` : '';
-  const id = target.slice(1);
-  if (!id) return { track: null, reason: 'missing target' };
-  if (!allowedTargets.has(id)) return { track: null, reason: `unknown target ${target}` };
+  if (!rawTarget) return { track: null, reason: 'missing target' };
+
+  const resolved = resolveTarget(rawTarget, catalog);
+  if (!resolved) return { track: null, reason: `unknown target ${rawTarget}` };
+  const target = `#${resolved.id}`;
 
   const effectValue = value.effect ?? value.type ?? value.motion;
   const rawEffect = typeof effectValue === 'string' ? effectValue.trim().toLowerCase() : '';
@@ -203,9 +254,15 @@ function normalizeTrack(
   applyTopLevelValues(effect, value, to);
   applyEffectDefaults(effect, from, to);
   ensurePerceptibleDelta(effect, from, to);
+  constrainTrack(resolved, effect, from, to);
+
+  const warning = normalizeTargetText(rawTarget) !== normalizeTargetText(resolved.id)
+    ? `repaired target ${rawTarget} → #${resolved.id}`
+    : undefined;
 
   return {
     track: { target, effect, duration, delay, ease, yoyo, from, to },
+    ...(warning ? { warning } : {}),
   };
 }
 
@@ -294,13 +351,154 @@ function ensurePerceptibleDelta(effect: MotionEffect, from: MotionValues, to: Mo
   }
 }
 
-function targetIds(svgMarkup: string): Set<string> {
+function constrainTrack(target: TargetInfo, effect: MotionEffect, from: MotionValues, to: MotionValues): void {
+  const id = target.id.toLowerCase();
+  const isRoot = id === 'root' || id === 'scene' || id === 'world';
+  const isMajor = isRoot
+    || target.role === 'character'
+    || target.role === 'body'
+    || target.graphicsCount >= 12
+    || /(^|[-_])(torso|pelvis|body)([-_]|$)/.test(id);
+
+  if (effect === 'translate') {
+    const limit = isRoot ? 8 : isMajor ? 24 : 96;
+    from.x = clamp(from.x ?? 0, -limit, limit);
+    from.y = clamp(from.y ?? 0, -limit, limit);
+    to.x = clamp(to.x ?? 0, -limit, limit);
+    to.y = clamp(to.y ?? 0, -limit, limit);
+  } else if (effect === 'rotate') {
+    const limit = isRoot ? 6 : isMajor ? 24 : 360;
+    from.rotation = clamp(from.rotation ?? 0, -limit, limit);
+    to.rotation = clamp(to.rotation ?? 0, -limit, limit);
+  } else if (effect === 'scale' || effect === 'pulse') {
+    const min = isRoot ? 0.98 : isMajor ? 0.9 : 0.65;
+    const max = isRoot ? 1.02 : isMajor ? 1.12 : 1.5;
+    from.scale = clamp(from.scale ?? 1, min, max);
+    to.scale = clamp(to.scale ?? 1, min, max);
+  }
+}
+
+function resolveTarget(raw: string, catalog: TargetInfo[]): TargetInfo | null {
+  const clean = raw.replace(/^#/, '').trim();
+  if (!clean) return null;
+
+  const exact = catalog.find((target) => target.id === clean);
+  if (exact) return exact;
+  const caseInsensitive = catalog.find((target) => target.id.toLowerCase() === clean.toLowerCase());
+  if (caseInsensitive) return caseInsensitive;
+
+  const wanted = targetTokens(clean);
+  let best: TargetInfo | null = null;
+  let bestScore = 0;
+  let tied = false;
+
+  for (const target of catalog) {
+    const candidate = targetTokens(target.id);
+    let score = 0;
+    wanted.forEach((token) => {
+      if (candidate.has(token)) score += token === 'left' || token === 'right' ? 1.25 : 1;
+    });
+    if (score > bestScore) {
+      best = target;
+      bestScore = score;
+      tied = false;
+    } else if (score > 0 && Math.abs(score - bestScore) < 0.001) {
+      tied = true;
+    }
+  }
+
+  const threshold = wanted.size <= 1 ? 1 : 2;
+  return best && bestScore >= threshold && !tied ? best : null;
+}
+
+function targetTokens(value: string): Set<string> {
+  const expanded = value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/(^|[_\-\s])l(?=$|[_\-\s])/gi, '$1 left ')
+    .replace(/(^|[_\-\s])r(?=$|[_\-\s])/gi, '$1 right ')
+    .replace(/forearm/gi, 'forearm arm')
+    .replace(/upperarm/gi, 'upper arm')
+    .replace(/lowerarm/gi, 'lower arm')
+    .replace(/upperleg/gi, 'upper leg')
+    .replace(/lowerleg/gi, 'lower leg')
+    .toLowerCase();
+  return new Set(expanded.split(/[^a-z0-9]+/).filter((token) => token && token !== 'animator'));
+}
+
+function normalizeTargetText(value: string): string {
+  return value.replace(/^#/, '').trim().toLowerCase();
+}
+
+function targetCatalog(svgMarkup: string): TargetInfo[] {
   const doc = new DOMParser().parseFromString(svgMarkup, 'image/svg+xml');
-  return new Set(
-    Array.from(doc.querySelectorAll<SVGGraphicsElement>('[data-animator-motion-target="true"]'))
-      .map((element) => element.id)
-      .filter(Boolean),
-  );
+  return Array.from(doc.querySelectorAll<SVGGraphicsElement>('[data-animator-motion-target="true"]'))
+    .map((element) => ({
+      id: element.id,
+      role: element.dataset.animatorRole || 'unknown',
+      isGroup: element.dataset.animatorGroup === 'true',
+      graphicsCount: element.dataset.animatorGroup === 'true'
+        ? element.querySelectorAll('path, circle, ellipse, rect, line, polyline, polygon, text').length
+        : 1,
+    }))
+    .filter((target) => Boolean(target.id));
+}
+
+function buildFallbackMotionSpec(catalog: TargetInfo[], style: FallbackStyle): MotionSpec {
+  const amount = style === 'subtle' ? 0.6 : style === 'expressive' ? 1.45 : 1;
+  const tracks: MotionTrack[] = [];
+  const used = new Set<string>();
+
+  const find = (...patterns: RegExp[]): TargetInfo | undefined => catalog.find((target) =>
+    !used.has(target.id) && patterns.some((pattern) => pattern.test(target.id)));
+  const add = (target: TargetInfo | undefined, effect: MotionEffect, to: MotionValues, duration: number, delay = 0): void => {
+    if (!target || used.has(target.id)) return;
+    const from: MotionValues = effect === 'scale' || effect === 'pulse'
+      ? { scale: 1, opacity: 1 }
+      : effect === 'opacity'
+        ? { opacity: 1 }
+        : effect === 'rotate'
+          ? { rotation: 0 }
+          : { x: 0, y: 0 };
+    const adjusted = { ...to };
+    if (typeof adjusted.x === 'number') adjusted.x *= amount;
+    if (typeof adjusted.y === 'number') adjusted.y *= amount;
+    if (typeof adjusted.rotation === 'number') adjusted.rotation *= amount;
+    if (typeof adjusted.scale === 'number') adjusted.scale = 1 + (adjusted.scale - 1) * amount;
+    constrainTrack(target, effect, from, adjusted);
+    tracks.push({
+      target: `#${target.id}`,
+      effect,
+      duration: clamp(duration / Math.max(0.75, amount), 0.7, 4),
+      delay,
+      ease: 'sine.inOut',
+      yoyo: true,
+      from,
+      to: adjusted,
+    });
+    used.add(target.id);
+  };
+
+  add(find(/^torso$/i, /torso/i, /body/i), 'translate', { x: 0, y: -5 }, 2.2);
+  add(find(/^head$/i, /head/i), 'rotate', { rotation: 5 }, 1.8, 0.1);
+  add(find(/upper[_-]?arm[_-]?l/i, /left.*arm/i), 'rotate', { rotation: -12 }, 1.55, 0.1);
+  add(find(/upper[_-]?arm[_-]?r/i, /right.*arm/i), 'rotate', { rotation: 12 }, 1.55, 0.1);
+  add(find(/thigh[_-]?l/i, /left.*thigh/i, /left.*leg/i), 'rotate', { rotation: 8 }, 1.8, 0.25);
+  add(find(/thigh[_-]?r/i, /right.*thigh/i, /right.*leg/i), 'rotate', { rotation: -8 }, 1.8, 0.25);
+  add(find(/shield/i, /sword/i, /weapon/i), 'rotate', { rotation: 7 }, 1.6, 0.2);
+
+  if (!tracks.length) {
+    const groups = catalog.filter((target) => target.isGroup && !/^(root|scene|world)$/i.test(target.id));
+    const primary = groups[0] ?? catalog.find((target) => !/^(root|scene|world)$/i.test(target.id)) ?? catalog[0];
+    const secondary = groups[1] ?? catalog.find((target) => target.id !== primary?.id);
+    add(primary, 'translate', { x: 0, y: -7 }, 2.1);
+    add(secondary, 'rotate', { rotation: 5 }, 1.9, 0.15);
+  }
+
+  if (!tracks.length && catalog[0]) {
+    add(catalog[0], 'opacity', { opacity: 0.75 }, 1.8);
+  }
+
+  return { version: 1, loop: true, tracks };
 }
 
 function parseJsonValue(text: string): unknown {
