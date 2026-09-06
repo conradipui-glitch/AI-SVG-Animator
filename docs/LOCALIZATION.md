@@ -1,8 +1,10 @@
 # AI SVG Animator — Localization Strategy
 
+> **Implementation status:** the repository now contains typed RU / EN dictionaries and locale resolution in `src/i18n/`.
+
 AI SVG Animator ships with two interface languages from the first public MVP:
 
-- **Русский (RU)** — default for users from CIS markets and Russian-language browsers.
+- **Русский (RU)** — default for Russian-language browsers and, when browser preference is unavailable, CIS-market geography.
 - **English (EN)** — default for the rest of the world.
 
 ## Product principle
@@ -17,7 +19,8 @@ Use this priority order on first load:
 
 1. **Saved user choice** (`localStorage`) if present.
 2. **Browser language** (`navigator.languages` / `Accept-Language`).
-   - `ru-*` → RU.
+   - `ru-*` → RU;
+   - `en-*` → EN.
 3. **Country / Cloudflare request metadata** as a fallback.
    - configured CIS-market country set → RU.
 4. Everything else → EN.
@@ -65,49 +68,32 @@ Users may write generation prompts in either Russian or English regardless of UI
 
 The provider adapter should pass the user's prompt as-is by default. Prompt rewriting or translation, if introduced later, must be an explicit internal step and must preserve user intent.
 
-## Implementation direction
+## Implementation
 
-Keep translations as typed dictionaries rather than scattering strings across components.
-
-Suggested structure:
+Current structure:
 
 ```text
 src/
   i18n/
     index.ts
-    ru.ts
     en.ts
+    ru.ts
     types.ts
 ```
 
-Example:
+`types.ts` defines the translation schema. `en.ts` and `ru.ts` implement the dictionaries. `index.ts` provides:
 
-```ts
-export const en = {
-  hero: {
-    title: 'AI SVG Animator',
-    subtitle: 'Turn ideas into living vectors.'
-  },
-  actions: {
-    generate: 'Generate SVG',
-    animate: 'Animate',
-    export: 'Export'
-  }
-} as const;
-```
+- saved-locale lookup;
+- browser-locale detection;
+- CIS-country fallback;
+- locale persistence;
+- a locale-change browser event;
+- typed access to the active dictionary.
 
-```ts
-export const ru = {
-  hero: {
-    title: 'AI SVG Animator',
-    subtitle: 'Превращайте идеи в живые векторы.'
-  },
-  actions: {
-    generate: 'Создать SVG',
-    animate: 'Анимировать',
-    export: 'Экспорт'
-  }
-} satisfies TranslationSchema;
+Storage key:
+
+```text
+ai-svg-animator.locale
 ```
 
 ## URLs and SEO
@@ -125,23 +111,21 @@ with correct `hreflang` metadata and shareable localized URLs.
 
 ## README strategy
 
-GitHub documentation should also be bilingual, but English should remain the repository entry point because GitHub discovery is global.
-
-Recommended layout:
+GitHub documentation is bilingual, with English as the repository entry point for global discovery:
 
 - `README.md` — English primary README;
 - `README.ru.md` — complete Russian version;
-- language links at the very top of both files: **English | Русский**.
-
-Hero artwork should avoid embedding long language-dependent copy where possible. Shared visual assets should remain usable in both README versions.
+- language links at the top of both files;
+- localized hero and pipeline SVG assets in `assets/`.
 
 ## Acceptance criteria
 
 Localization is ready for the first public release when:
 
-1. a Russian-speaking/CIS-market visitor normally lands in RU;
-2. other visitors normally land in EN;
-3. RU/EN can be switched instantly;
-4. the selection survives reloads;
-5. no core flow contains untranslated UI strings;
-6. both languages can complete the full flow: **prompt → SVG → motion → preview → export**.
+1. a Russian-language visitor normally lands in RU;
+2. a CIS-market visitor without an EN/RU browser preference falls back to RU;
+3. other visitors normally land in EN;
+4. RU/EN can be switched instantly;
+5. the selection survives reloads;
+6. no core flow contains untranslated UI strings;
+7. both languages can complete the full flow: **prompt → SVG → motion → preview → export**.
