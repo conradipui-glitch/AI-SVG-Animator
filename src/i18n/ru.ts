@@ -45,8 +45,24 @@ export const ru = {
     intensity: 'Интенсивность',
     loop: 'Цикл'
   },
+  readiness: {
+    section: '05 · ПОДГОТОВКА К ДВИЖЕНИЮ',
+    score: 'Готовность',
+    groups: 'Группы',
+    semantic: 'Семантика',
+    splitCandidates: 'Нужно разделить',
+    analyze: 'Разобрать части с AI',
+    analyzing: 'AI анализирует части…',
+    enriched: 'Карта дополнена AI',
+    detected: 'Распознано',
+    separationTitle: 'Что стоит разделить',
+    noSeparation: 'Явного структурного разделения не требуется.',
+    low: 'Низкая',
+    medium: 'Средняя',
+    high: 'Высокая'
+  },
   ai: {
-    section: '05 · AI MOTION DIRECTOR',
+    section: '06 · AI MOTION DIRECTOR',
     model: 'Бесплатная модель',
     prompt: 'Опиши анимацию',
     promptPlaceholder: 'Например: главный персонаж слегка дышит и моргает, а второстепенные элементы очень мягко покачиваются…',
@@ -70,6 +86,8 @@ export const ru = {
     ready: 'Готово',
     exported: 'HTML экспортирован',
     loaded: 'SVG загружен',
+    motionPreparing: 'AI сопоставляет объекты, части и точки вращения…',
+    motionPrepared: 'Семантическая карта движения применена',
     aiPreparing: 'Готовим SVG и визуальный рендер…',
     aiRequesting: 'ИИ анализирует сцену и строит движение…',
     aiValidating: 'Проверяем Motion Spec…',
@@ -84,7 +102,8 @@ export const ru = {
     aiUnavailable: 'AI-анимация сейчас недоступна.',
     aiNeedsSvg: 'Сначала примени SVG, а затем запусти AI-анимацию.',
     aiInvalidSpec: 'Модель ответила, но не удалось получить исполняемую анимацию.',
-    aiNoVariants: 'Модель не вернула ни одного пригодного варианта анимации.'
+    aiNoVariants: 'Модель не вернула ни одного пригодного варианта анимации.',
+    motionPreparationEmpty: 'AI ответил, но не смог дополнить ни одного существующего узла SVG.'
   },
-  footer: { note: 'Static Animator + AI Motion Director' }
+  footer: { note: 'Motion-Ready SVG + AI Motion Director' }
 } satisfies TranslationSchema;
