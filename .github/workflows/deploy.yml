@@ -3,6 +3,11 @@ name: Deploy Cloudflare
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'README.ru.md'
+      - 'docs/**'
+      - 'assets/**'
   workflow_dispatch:
 
 jobs:
