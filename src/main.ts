@@ -1,4 +1,5 @@
 import './styles.css';
+import { fetchAiModels, requestMotionPlan, type AiModelOption } from './ai';
 import { animateSvg, stopAnimation, type MotionOptions, type Preset } from './animator';
 import { buildStandaloneHtml, downloadText } from './export';
 import { resolveLocale, saveLocale, t, type Locale } from './i18n';
@@ -15,6 +16,12 @@ interface State {
   loop: boolean;
   status: string;
   error: string;
+  aiModels: AiModelOption[];
+  aiModel: string;
+  aiPrompt: string;
+  aiPlan: string;
+  aiPlanMeta: string;
+  aiBusy: boolean;
 }
 
 const state: State = {
@@ -26,7 +33,13 @@ const state: State = {
   intensity: 0.55,
   loop: true,
   status: '',
-  error: ''
+  error: '',
+  aiModels: [],
+  aiModel: 'glm-5.3-flash',
+  aiPrompt: '',
+  aiPlan: '',
+  aiPlanMeta: '',
+  aiBusy: false,
 };
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
@@ -92,17 +105,38 @@ function render(): void {
         </section>
 
         <aside class="panel motion-panel">
-          <div class="panel-kicker">${tr.presets.section}</div>
-          <div class="preset-list">
-            ${presetCard('reveal', tr.presets.reveal, tr.presets.revealDesc)}
-            ${presetCard('draw', tr.presets.draw, tr.presets.drawDesc)}
-            ${presetCard('float', tr.presets.float, tr.presets.floatDesc)}
+          <div class="motion-block">
+            <div class="panel-kicker">${tr.presets.section}</div>
+            <div class="preset-list">
+              ${presetCard('reveal', tr.presets.reveal, tr.presets.revealDesc)}
+              ${presetCard('draw', tr.presets.draw, tr.presets.drawDesc)}
+              ${presetCard('float', tr.presets.float, tr.presets.floatDesc)}
+            </div>
           </div>
+
           <div class="divider"></div>
-          <div class="panel-kicker">${tr.controls.section}</div>
-          ${rangeControl('duration', tr.controls.duration, state.duration, 0.3, 4, 0.1, `${state.duration.toFixed(1)}s`)}
-          ${rangeControl('intensity', tr.controls.intensity, state.intensity, 0.1, 1, 0.05, `${Math.round(state.intensity * 100)}%`)}
-          <label class="toggle-row"><span>${tr.controls.loop}</span><input id="loopControl" type="checkbox" ${state.loop ? 'checked' : ''}/><span class="toggle-ui"></span></label>
+          <div class="motion-block">
+            <div class="panel-kicker">${tr.controls.section}</div>
+            ${rangeControl('duration', tr.controls.duration, state.duration, 0.3, 4, 0.1, `${state.duration.toFixed(1)}s`)}
+            ${rangeControl('intensity', tr.controls.intensity, state.intensity, 0.1, 1, 0.05, `${Math.round(state.intensity * 100)}%`)}
+            <label class="toggle-row"><span>${tr.controls.loop}</span><input id="loopControl" type="checkbox" ${state.loop ? 'checked' : ''}/><span class="toggle-ui"></span></label>
+          </div>
+
+          <div class="divider"></div>
+          <div class="motion-block ai-motion-block">
+            <div class="panel-kicker">${tr.ai.section}</div>
+            <label class="field-label" for="aiModelSelect">${tr.ai.model}</label>
+            <select id="aiModelSelect" class="ai-select" ${state.aiBusy ? 'disabled' : ''}>
+              ${aiModelOptions(tr.ai.noModels)}
+            </select>
+            <label class="field-label ai-prompt-label" for="aiPrompt">${tr.ai.prompt}</label>
+            <textarea id="aiPrompt" class="ai-prompt" spellcheck="true" placeholder="${tr.ai.promptPlaceholder}">${escapeHtml(state.aiPrompt)}</textarea>
+            <p class="microcopy">${tr.ai.autoHint}</p>
+            <button class="button ai-button full" id="aiMotionButton" ${state.cleanSvg && !state.aiBusy ? '' : 'disabled'}>
+              ${state.aiBusy ? tr.ai.generating : tr.ai.generate}
+            </button>
+            ${state.aiPlan ? `<div class="ai-plan"><div class="ai-plan-head"><strong>${tr.ai.planTitle}</strong><span>${escapeHtml(state.aiPlanMeta)}</span></div><pre>${escapeHtml(state.aiPlan)}</pre></div>` : ''}
+          </div>
         </aside>
       </section>
 
@@ -110,6 +144,18 @@ function render(): void {
     </main>`;
 
   bindEvents();
+}
+
+function aiModelOptions(emptyLabel: string): string {
+  const candidates = state.aiModels.filter((model) => model.capabilities.includes('text') && model.availableForCredential !== false);
+  if (!candidates.length) {
+    return `<option value="${escapeHtml(state.aiModel)}">${escapeHtml(state.aiModel || emptyLabel)}</option>`;
+  }
+
+  return candidates.map((model) => {
+    const selected = state.aiModel === model.id ? 'selected' : '';
+    return `<option value="${escapeHtml(model.id)}" ${selected}>${escapeHtml(model.label)}</option>`;
+  }).join('');
 }
 
 function presetCard(preset: Preset, title: string, description: string): string {
@@ -198,6 +244,18 @@ function bindEvents(): void {
   document.querySelector<HTMLInputElement>('#loopControl')?.addEventListener('change', (event) => {
     state.loop = (event.target as HTMLInputElement).checked;
   });
+
+  document.querySelector<HTMLSelectElement>('#aiModelSelect')?.addEventListener('change', (event) => {
+    state.aiModel = (event.target as HTMLSelectElement).value;
+  });
+
+  document.querySelector<HTMLTextAreaElement>('#aiPrompt')?.addEventListener('input', (event) => {
+    state.aiPrompt = (event.target as HTMLTextAreaElement).value;
+  });
+
+  document.querySelector<HTMLButtonElement>('#aiMotionButton')?.addEventListener('click', () => {
+    void generateMotionPlan();
+  });
 }
 
 function applySvg(): void {
@@ -211,6 +269,8 @@ function applySvg(): void {
 
   state.status = tr.status.cleaning;
   state.error = '';
+  state.aiPlan = '';
+  state.aiPlanMeta = '';
   try {
     const normalized = normalizeSvg(state.rawSvg);
     state.cleanSvg = normalized.markup;
@@ -222,6 +282,48 @@ function applySvg(): void {
     state.error = code === 'empty-svg' ? tr.errors.emptySvg : tr.errors.invalidSvg;
     state.cleanSvg = '';
     render();
+  }
+}
+
+async function generateMotionPlan(): Promise<void> {
+  const tr = t(state.locale);
+  if (!state.cleanSvg) {
+    state.error = tr.errors.aiNeedsSvg;
+    updateStatus();
+    return;
+  }
+
+  state.aiBusy = true;
+  state.error = '';
+  state.aiPlan = '';
+  state.aiPlanMeta = '';
+  render();
+
+  try {
+    const result = await requestMotionPlan(state.cleanSvg, state.aiPrompt, state.aiModel || undefined);
+    state.aiPlan = formatPlanText(result.text);
+    state.aiPlanMeta = `${result.model} · ${result.latencyMs}ms${result.fallbackUsed ? ` · ${tr.ai.fallback}` : ''}`;
+    state.status = tr.status.aiReady;
+  } catch {
+    state.error = tr.errors.aiUnavailable;
+  } finally {
+    state.aiBusy = false;
+    render();
+  }
+}
+
+function formatPlanText(value: string): string {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+    if (!fenced) return value.trim();
+    try {
+      return JSON.stringify(JSON.parse(fenced), null, 2);
+    } catch {
+      return fenced.trim();
+    }
   }
 }
 
@@ -246,7 +348,25 @@ function updateStatus(): void {
 }
 
 function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+async function loadAiModels(): Promise<void> {
+  try {
+    const response = await fetchAiModels();
+    state.aiModels = response.selectable;
+    const eligible = state.aiModels.find((model) => model.id === response.defaults.reason && model.availableForCredential !== false)
+      ?? state.aiModels.find((model) => model.capabilities.includes('text') && model.availableForCredential !== false);
+    if (eligible) state.aiModel = eligible.id;
+    render();
+  } catch {
+    // The app remains usable as a static animator even if the AI backend is not configured yet.
+  }
 }
 
 render();
+void loadAiModels();
