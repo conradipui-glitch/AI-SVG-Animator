@@ -194,6 +194,7 @@ function normalizeValues(value: unknown): MotionValues {
   if (typeof value.x === 'number' && Number.isFinite(value.x)) result.x = clamp(value.x, -200, 200);
   if (typeof value.y === 'number' && Number.isFinite(value.y)) result.y = clamp(value.y, -200, 200);
   if (typeof value.rotation === 'number' && Number.isFinite(value.rotation)) result.rotation = clamp(value.rotation, -180, 180);
+  else if (typeof value.angle === 'number' && Number.isFinite(value.angle)) result.rotation = clamp(value.angle, -180, 180);
   if (typeof value.scale === 'number' && Number.isFinite(value.scale)) result.scale = clamp(value.scale, 0.05, 4);
   if (typeof value.opacity === 'number' && Number.isFinite(value.opacity)) result.opacity = clamp(value.opacity, 0, 1);
 
@@ -205,8 +206,9 @@ function applyTopLevelValues(effect: MotionEffect, value: Record<string, unknown
     if (typeof value.x === 'number' && Number.isFinite(value.x)) to.x = clamp(value.x, -200, 200);
     if (typeof value.y === 'number' && Number.isFinite(value.y)) to.y = clamp(value.y, -200, 200);
   }
-  if (effect === 'rotate' && typeof value.rotation === 'number' && Number.isFinite(value.rotation)) {
-    to.rotation = clamp(value.rotation, -180, 180);
+  if (effect === 'rotate') {
+    if (typeof value.rotation === 'number' && Number.isFinite(value.rotation)) to.rotation = clamp(value.rotation, -180, 180);
+    else if (typeof value.angle === 'number' && Number.isFinite(value.angle)) to.rotation = clamp(value.angle, -180, 180);
   }
   if ((effect === 'scale' || effect === 'pulse') && typeof value.scale === 'number' && Number.isFinite(value.scale)) {
     to.scale = clamp(value.scale, 0.05, 4);
