@@ -59,11 +59,31 @@ function buildMotionPrompt(svgMarkup: string, animationPrompt: string): string {
   const intent = animationPrompt.trim() || 'Choose a tasteful automatic animation for the key visual elements only.';
 
   return [
-    'Create a Motion Spec proposal for this SVG.',
+    'Create Motion Spec v1 for this SVG and return JSON only.',
     `User animation intent: ${intent}`,
     `SVG viewBox: ${viewBox}`,
     `Animatable nodes (${nodes.length} listed): ${JSON.stringify(nodes)}`,
-    'Use only target IDs present in the node list. Prefer a small number of meaningful targets, not every node.',
-    'Return JSON only when possible.',
+    'Use only target IDs present in the node list. Target must be written as a CSS id selector such as #animator-node-3.',
+    'Prefer 1-8 meaningful targets. Do not animate every node unless the user explicitly asks for full-scene motion.',
+    'Allowed effects: translate, rotate, scale, opacity, pulse, draw.',
+    'All numeric motion values must be conservative and visually plausible.',
+    'Schema:',
+    JSON.stringify({
+      version: 1,
+      loop: true,
+      tracks: [
+        {
+          target: '#animator-node-1',
+          effect: 'translate',
+          duration: 1.6,
+          delay: 0,
+          ease: 'sine.inOut',
+          yoyo: true,
+          from: { x: 0, y: 0 },
+          to: { x: 8, y: -4 },
+        },
+      ],
+    }),
+    'For rotate use from/to.rotation in degrees. For scale use from/to.scale. For opacity use from/to.opacity. For pulse use to.scale and optionally to.opacity. For draw, omit from/to.',
   ].join('\n');
 }
