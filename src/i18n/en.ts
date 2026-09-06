@@ -50,12 +50,19 @@ export const en = {
     model: 'Free model',
     prompt: 'Describe the animation',
     promptPlaceholder: 'e.g. Make the main character breathe subtly, blink, and let the secondary shapes drift very gently…',
-    autoHint: 'Leave the prompt empty for automatic motion. The AI is instructed to animate only key elements by default.',
-    generate: 'Generate Motion Plan',
-    generating: 'Planning motion…',
-    planTitle: 'Motion Plan',
+    autoHint: 'Empty prompt = automatic motion for key elements. AI receives both SVG structure and a visual render.',
+    generate: '✨ Animate with AI',
+    generating: 'AI is creating motion…',
+    suggestVariants: 'Suggest 3 variants',
+    generatingVariants: 'AI is preparing variants…',
+    variantsTitle: 'Animation variants',
+    applyVariant: 'Apply',
+    activeVariant: 'Selected',
+    technicalDetails: 'Technical details',
+    rawResponse: 'Model response',
     noModels: 'Free-model list is unavailable; the backend will use its default route.',
-    fallback: 'fallback used'
+    fallback: 'fallback used',
+    partial: 'partially applied'
   },
   status: {
     cleaning: 'Cleaning SVG…',
@@ -63,14 +70,21 @@ export const en = {
     ready: 'Ready',
     exported: 'HTML exported',
     loaded: 'SVG loaded',
-    aiReady: 'AI motion plan ready'
+    aiPreparing: 'Preparing SVG and visual render…',
+    aiRequesting: 'AI is analyzing the scene and planning motion…',
+    aiValidating: 'Validating Motion Spec…',
+    aiApplying: 'Applying animation…',
+    aiReady: 'AI animation applied',
+    variantsReady: 'Variants are ready — choose one'
   },
   errors: {
     invalidSvg: 'The input is not a valid SVG.',
     emptySvg: 'Paste or upload an SVG first.',
     readFile: 'Could not read this SVG file.',
-    aiUnavailable: 'AI motion planning is temporarily unavailable.',
-    aiNeedsSvg: 'Apply an SVG before asking AI for a motion plan.'
+    aiUnavailable: 'AI animation is currently unavailable.',
+    aiNeedsSvg: 'Apply an SVG before running AI animation.',
+    aiInvalidSpec: 'The model responded, but no executable animation could be produced.',
+    aiNoVariants: 'The model did not return any usable animation variants.'
   },
-  footer: { note: 'Static Animator + AI Motion routing' }
+  footer: { note: 'Static Animator + AI Motion Director' }
 } satisfies TranslationSchema;
