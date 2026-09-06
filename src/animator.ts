@@ -1,6 +1,6 @@
 import { gsap } from 'gsap';
 import type { MotionSpec, MotionTrack } from './motion-spec';
-import { getAnimatableElements } from './svg';
+import { getAnimatableElements, getMotionTargetElements } from './svg';
 
 export type Preset = 'reveal' | 'draw' | 'float';
 
@@ -49,7 +49,7 @@ export function animateSvg(svg: SVGSVGElement, options: MotionOptions): void {
 export function animateMotionSpec(svg: SVGSVGElement, spec: MotionSpec): void {
   stopAnimation();
   setActiveMotionSpec(spec);
-  const allElements = getAnimatableElements(svg);
+  const allElements = getMotionTargetElements(svg);
   gsap.killTweensOf(allElements);
   gsap.set(allElements, { clearProps: 'transform,opacity,transformOrigin,strokeDasharray,strokeDashoffset,fillOpacity' });
 
@@ -100,12 +100,21 @@ function addMotionTrack(tl: gsap.core.Timeline, element: SVGGraphicsElement, tra
 
   tl.fromTo(element, from, {
     ...to,
-    transformOrigin: '50% 50%',
+    transformOrigin: transformOriginFor(element),
     duration: track.duration,
     ease: track.ease,
     yoyo: track.yoyo,
     repeat: track.yoyo ? 1 : 0,
   }, track.delay);
+}
+
+function transformOriginFor(element: SVGGraphicsElement): string {
+  const pivot = element.dataset.animatorPivot;
+  if (pivot === 'bottom-center') return '50% 100%';
+  if (pivot === 'top-center') return '50% 0%';
+  if (pivot === 'left-center') return '0% 50%';
+  if (pivot === 'right-center') return '100% 50%';
+  return '50% 50%';
 }
 
 function valuesForTrack(track: MotionTrack, values: MotionTrack['from']): gsap.TweenVars {
