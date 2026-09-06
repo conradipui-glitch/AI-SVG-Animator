@@ -25,6 +25,22 @@ export interface MotionSpec {
   tracks: MotionTrack[];
 }
 
+export interface MotionSpecValidation {
+  spec: MotionSpec | null;
+  receivedTracks: number;
+  acceptedTracks: number;
+  rejectedTracks: number;
+  warnings: string[];
+}
+
+export interface MotionVariant {
+  id: string;
+  title: string;
+  description: string;
+  spec: MotionSpec;
+  validation: MotionSpecValidation;
+}
+
 const EFFECTS = new Set<MotionEffect>(['translate', 'rotate', 'scale', 'opacity', 'pulse', 'draw']);
 const SAFE_EASES = new Set([
   'none',
@@ -42,56 +58,132 @@ const SAFE_EASES = new Set([
 ]);
 
 export function parseMotionSpec(text: string, svgMarkup: string): MotionSpec | null {
-  const parsed = parseJsonObject(text);
-  if (!parsed) return null;
+  return validateMotionSpecText(text, svgMarkup).spec;
+}
+
+export function validateMotionSpecText(text: string, svgMarkup: string): MotionSpecValidation {
+  const parsed = parseJsonValue(text);
+  return validateMotionSpecValue(parsed, svgMarkup);
+}
+
+export function validateMotionSpecValue(value: unknown, svgMarkup: string): MotionSpecValidation {
+  const parsed = unwrapMotionSpec(value);
+  if (!parsed) {
+    return {
+      spec: null,
+      receivedTracks: 0,
+      acceptedTracks: 0,
+      rejectedTracks: 0,
+      warnings: ['AI response did not contain a Motion Spec object.'],
+    };
+  }
 
   const tracksValue = parsed.tracks;
-  if (!Array.isArray(tracksValue)) return null;
+  if (!Array.isArray(tracksValue)) {
+    return {
+      spec: null,
+      receivedTracks: 0,
+      acceptedTracks: 0,
+      rejectedTracks: 0,
+      warnings: ['Motion Spec did not contain a tracks array.'],
+    };
+  }
 
   const allowedTargets = targetIds(svgMarkup);
-  const tracks = tracksValue
-    .map((value) => normalizeTrack(value, allowedTargets))
-    .filter((track): track is MotionTrack => Boolean(track))
-    .slice(0, 16);
+  const warnings: string[] = [];
+  const tracks: MotionTrack[] = [];
 
-  if (!tracks.length) return null;
+  tracksValue.slice(0, 24).forEach((trackValue, index) => {
+    const result = normalizeTrack(trackValue, allowedTargets);
+    if (result.track) tracks.push(result.track);
+    else warnings.push(`Track ${index + 1}: ${result.reason || 'rejected'}`);
+  });
+
+  const receivedTracks = Math.min(tracksValue.length, 24);
+  const acceptedTracks = tracks.length;
+  const rejectedTracks = receivedTracks - acceptedTracks;
 
   return {
-    version: 1,
-    loop: parsed.loop !== false,
-    tracks,
+    spec: acceptedTracks ? { version: 1, loop: parsed.loop !== false, tracks } : null,
+    receivedTracks,
+    acceptedTracks,
+    rejectedTracks,
+    warnings,
   };
 }
 
-function normalizeTrack(value: unknown, allowedTargets: Set<string>): MotionTrack | null {
+export function parseMotionVariants(text: string, svgMarkup: string): MotionVariant[] {
+  const parsed = parseJsonValue(text);
+  if (!isRecord(parsed) || !Array.isArray(parsed.variants)) return [];
+
+  return parsed.variants
+    .slice(0, 6)
+    .map((item, index): MotionVariant | null => {
+      if (!isRecord(item)) return null;
+      const candidate = item.motionSpec ?? item.spec ?? item;
+      const validation = validateMotionSpecValue(candidate, svgMarkup);
+      if (!validation.spec) return null;
+      return {
+        id: safeString(item.id) || `variant-${index + 1}`,
+        title: safeString(item.title) || `Variant ${index + 1}`,
+        description: safeString(item.description) || '',
+        spec: validation.spec,
+        validation,
+      };
+    })
+    .filter((variant): variant is MotionVariant => Boolean(variant));
+}
+
+function unwrapMotionSpec(value: unknown): Record<string, unknown> | null {
   if (!isRecord(value)) return null;
+  if (Array.isArray(value.tracks)) return value;
+  if (isRecord(value.motionSpec)) return value.motionSpec;
+  if (isRecord(value.spec)) return value.spec;
+  return null;
+}
+
+function normalizeTrack(
+  value: unknown,
+  allowedTargets: Set<string>,
+): { track: MotionTrack | null; reason?: string } {
+  if (!isRecord(value)) return { track: null, reason: 'not an object' };
 
   const rawTarget = typeof value.target === 'string' ? value.target.trim() : '';
   const target = rawTarget.startsWith('#') ? rawTarget : rawTarget ? `#${rawTarget}` : '';
   const id = target.slice(1);
-  if (!id || !allowedTargets.has(id)) return null;
+  if (!id) return { track: null, reason: 'missing target' };
+  if (!allowedTargets.has(id)) return { track: null, reason: `unknown target ${target}` };
 
   const rawEffect = typeof value.effect === 'string' ? value.effect.trim().toLowerCase() : '';
   const effect = normalizeEffect(rawEffect);
-  if (!effect) return null;
+  if (!effect) return { track: null, reason: `unsupported effect ${rawEffect || '(empty)'}` };
 
   const duration = clampNumber(value.duration, 0.12, 8, 1.4);
   const delay = clampNumber(value.delay, 0, 8, 0);
-  const ease = typeof value.ease === 'string' && SAFE_EASES.has(value.ease) ? value.ease : 'sine.inOut';
-  const yoyo = value.yoyo !== false;
+  const rawEase = typeof value.ease === 'string'
+    ? value.ease
+    : typeof value.easing === 'string'
+      ? value.easing
+      : '';
+  const ease = SAFE_EASES.has(rawEase) ? rawEase : 'sine.inOut';
+  const yoyo = value.yoyo !== false && value.direction !== 'normal';
   const from = normalizeValues(value.from);
   const to = normalizeValues(value.to);
 
+  applyTopLevelValues(effect, value, to);
   applyEffectDefaults(effect, from, to);
 
-  return { target, effect, duration, delay, ease, yoyo, from, to };
+  return {
+    track: { target, effect, duration, delay, ease, yoyo, from, to },
+  };
 }
 
 function normalizeEffect(value: string): MotionEffect | null {
   if (EFFECTS.has(value as MotionEffect)) return value as MotionEffect;
-  if (value === 'move' || value === 'float') return 'translate';
-  if (value === 'fade') return 'opacity';
-  if (value === 'stroke-draw' || value === 'stroke_draw') return 'draw';
+  if (value === 'move' || value === 'float' || value === 'sway' || value === 'drift') return 'translate';
+  if (value === 'fade' || value === 'fadein' || value === 'fade-in') return 'opacity';
+  if (value === 'stroke-draw' || value === 'stroke_draw' || value === 'drawpath') return 'draw';
+  if (value === 'zoom') return 'scale';
   return null;
 }
 
@@ -106,6 +198,22 @@ function normalizeValues(value: unknown): MotionValues {
   if (typeof value.opacity === 'number' && Number.isFinite(value.opacity)) result.opacity = clamp(value.opacity, 0, 1);
 
   return result;
+}
+
+function applyTopLevelValues(effect: MotionEffect, value: Record<string, unknown>, to: MotionValues): void {
+  if (effect === 'translate') {
+    if (typeof value.x === 'number' && Number.isFinite(value.x)) to.x = clamp(value.x, -200, 200);
+    if (typeof value.y === 'number' && Number.isFinite(value.y)) to.y = clamp(value.y, -200, 200);
+  }
+  if (effect === 'rotate' && typeof value.rotation === 'number' && Number.isFinite(value.rotation)) {
+    to.rotation = clamp(value.rotation, -180, 180);
+  }
+  if ((effect === 'scale' || effect === 'pulse') && typeof value.scale === 'number' && Number.isFinite(value.scale)) {
+    to.scale = clamp(value.scale, 0.05, 4);
+  }
+  if ((effect === 'opacity' || effect === 'pulse') && typeof value.opacity === 'number' && Number.isFinite(value.opacity)) {
+    to.opacity = clamp(value.opacity, 0, 1);
+  }
 }
 
 function applyEffectDefaults(effect: MotionEffect, from: MotionValues, to: MotionValues): void {
@@ -140,7 +248,7 @@ function targetIds(svgMarkup: string): Set<string> {
   );
 }
 
-function parseJsonObject(text: string): Record<string, unknown> | null {
+function parseJsonValue(text: string): unknown {
   const candidates = [text.trim()];
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
   if (fenced) candidates.unshift(fenced);
@@ -151,8 +259,7 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
 
   for (const candidate of candidates) {
     try {
-      const value: unknown = JSON.parse(candidate);
-      if (isRecord(value)) return value;
+      return JSON.parse(candidate);
     } catch {
       // Try the next candidate.
     }
@@ -163,6 +270,10 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function safeString(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, 160) : '';
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
